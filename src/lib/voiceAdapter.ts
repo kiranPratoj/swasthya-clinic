@@ -158,6 +158,34 @@ async function validateFinalAudio(
 }
 
 /**
+ * Transcribes a full audio file and returns the transcript string.
+ * Used by patientExtractionAdapter for final processing.
+ */
+export async function transcribeAudio(formData: FormData): Promise<string> {
+  const audioFile = formData.get('audio') as File | null;
+  const sarvamKey = process.env.SARVAM_API_KEY;
+  if (!audioFile || !sarvamKey) return '';
+
+  const clientDurationMsValue = formData.get('durationMs');
+  const clientDurationMs = typeof clientDurationMsValue === 'string' ? Number(clientDurationMsValue) : null;
+
+  const validated = await validateFinalAudio(audioFile, Number.isFinite(clientDurationMs) ? clientDurationMs : null);
+  if (!validated.ok) throw new Error(validated.error);
+
+  const client = new SarvamAIClient({ apiSubscriptionKey: sarvamKey });
+  const tempFilePath = path.join(os.tmpdir(), `transcript_${Date.now()}${getAudioExtension(audioFile)}`);
+  fs.writeFileSync(tempFilePath, validated.buffer);
+
+  const response = await client.speechToText.transcribe({
+    file: fs.createReadStream(tempFilePath) as any,
+    model: 'saaras:v3',
+    mode: 'transcribe',
+  });
+  fs.unlinkSync(tempFilePath);
+  return response.transcript?.trim() ?? '';
+}
+
+/**
  * Lightweight chunk transcription called every ~2.5s during live recording.
  * Returns a partial transcript string or empty string on failure.
  */
