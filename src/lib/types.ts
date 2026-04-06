@@ -1,100 +1,124 @@
-export type RequestStatus = 
-  | 'submitted' 
-  | 'under_review' 
-  | 'approved' 
-  | 'rescheduled' 
-  | 'rejected' 
-  | 'attended' 
-  | 'closed';
+// Swasthya Clinic — Domain Types
+// Single source of truth. Match CONTRACTS.md exactly.
 
-export type RequestCategory = 'grievance' | 'project_review' | 'open_house' | 'general_inquiry';
+export type WorkingHours = {
+  mon?: { open: string; close: string };
+  tue?: { open: string; close: string };
+  wed?: { open: string; close: string };
+  thu?: { open: string; close: string };
+  fri?: { open: string; close: string };
+  sat?: { open: string; close: string };
+  sun?: { open: string; close: string };
+};
 
-export type InteractionMode = 'in-person' | 'online';
-export type GrievanceUrgency = 'low' | 'medium' | 'high' | 'critical';
-export type AIConfidence = 'low' | 'medium' | 'high';
-
-export interface AuditEvent {
+export type Clinic = {
   id: string;
-  timestamp: string;
+  name: string;
+  slug: string;
+  custom_domain: string | null;
+  phone: string;
+  speciality: string;
+  created_at: string;
+};
+
+export type Doctor = {
+  id: string;
+  clinic_id: string;
+  name: string;
+  speciality: string;
+  phone: string;
+  working_hours: WorkingHours;
+  slot_duration_mins: 10 | 15 | 20 | 30;
+};
+
+export type Staff = {
+  id: string;
+  clinic_id: string;
+  name: string;
+  role: string;
+  phone: string | null;
+};
+
+export type Patient = {
+  id: string;
+  clinic_id: string;
+  name: string;
+  age: number | null;
+  phone: string | null;
+  created_at: string;
+};
+
+export type AppointmentStatus = 'waiting' | 'consulting' | 'done' | 'cancelled' | 'no-show';
+export type VisitType = 'walk-in' | 'booked' | 'follow-up' | 'emergency';
+
+export type Appointment = {
+  id: string;
+  clinic_id: string;
+  patient_id: string;
+  doctor_id: string;
+  token_number: number;
+  visit_type: VisitType;
+  complaint: string;
+  status: AppointmentStatus;
+  notes: string | null;
+  booked_for: string;
+  created_at: string;
+  patient?: Patient;
+};
+
+export type VisitHistory = {
+  id: string;
+  clinic_id: string;
+  patient_id: string;
+  appointment_id: string | null;
+  summary: string;
+  created_at: string;
+};
+
+export type AuditLog = {
+  id: string;
+  clinic_id: string;
+  actor: string;
   action: string;
-  actor: 'citizen' | 'staff' | 'system';
-  details?: string;
-}
+  target_id: string | null;
+  meta: Record<string, unknown> | null;
+  created_at: string;
+};
 
-export type CommunicationChannel = 'email' | 'SMS' | 'WhatsApp' | 'portal only';
+// ─── Voice / AI intake types ──────────────────────────────────────────────────
 
-export type CommunicationState = 'queued' | 'prepared' | 'sent' | 'failed' | 'skipped';
-
-export interface CommunicationEvent {
-  id: string;
-  timestamp: string;
-  channel: CommunicationChannel;
-  state: CommunicationState;
-  summary: string;
-}
-
-export interface CitizenRequest {
-  id: string; // e.g. REQ-1001
-  applicantName: string;
-  mobile: string;
-  category: RequestCategory;
-  purpose: string;
-  summary: string;
-  preferredDay: 'Monday' | 'Tuesday' | 'Wednesday' | 'Thursday' | 'Friday' | 'Saturday';
-  mode: InteractionMode;
-  
-  status: RequestStatus;
-  createdAt: string;
-  updatedAt: string;
-  
-  // Slot allocation
-  assignedDate?: string; // YYYY-MM-DD
-  assignedTimeStr?: string; // e.g. "14:30 - 15:00"
-  
-  // Context Notes
-  rejectionReason?: string;
-  rescheduleReason?: string;
-  publicOfficeNote?: string;
-  internalStaffNote?: string;
-  aiTriage?: {
-    urgency: GrievanceUrgency;
-    staffSummary: string;
-    rationale: string;
-    confidence: AIConfidence;
-    modelUsed: string;
-    generatedAt: string;
-  };
-  
-  // History
-  auditTimeline: AuditEvent[];
-  communications: CommunicationEvent[];
-}
-
-export interface NoticeBanner {
-  id: string;
-  text: string;
-  active: boolean;
-  type: 'info' | 'warning' | 'error';
-}
-
-export type VoiceDraftStatus = 'listening' | 'processing' | 'ready' | 'failed';
-
-export type VoiceStructuredDraft = {
-  applicantName: string | null;
-  mobile: string | null;
-  preferredDay: string | null;
-  mode: "online" | "in-person" | null;
-  purpose: string | null;
+export type PatientIntakeDraft = {
+  patientName: string | null;
+  age: string | null;
+  phone: string | null;
+  complaint: string | null;
+  visitType: VisitType | null;
   summary: string;
   missingFields: string[];
 };
 
-export interface VoiceDraft {
+export type VoiceDraft = {
   id: string;
   transcript: string;
-  structuredData: VoiceStructuredDraft;
+  structuredData: PatientIntakeDraft;
+  status: 'processing' | 'ready' | 'failed';
   isFallback: boolean;
-  status: VoiceDraftStatus;
-  modelUsed?: string; // Tracks 'mock', 'manual', or specific model like 'sarvam-30b'
+  modelUsed?: string;
   errorMsg?: string;
-}
+};
+
+// ─── Onboarding ───────────────────────────────────────────────────────────────
+
+export type OnboardingInput = {
+  clinicName: string;
+  slug: string;
+  phone: string;
+  speciality: string;
+  doctorName: string;
+};
+
+// ─── Queue view (appointment + patient joined) ────────────────────────────────
+
+export type QueueItem = Appointment & {
+  patient: Patient;
+};
