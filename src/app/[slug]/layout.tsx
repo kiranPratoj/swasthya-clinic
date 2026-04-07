@@ -51,6 +51,7 @@ export default async function SlugLayout({
             {[
               { href: `/${slug}/intake`, label: 'Intake' },
               { href: `/${slug}/queue`, label: 'Queue' },
+              { href: `/${slug}/patients`, label: 'Patients' },
               { href: `/${slug}/history`, label: 'History' },
               { href: `/${slug}/admin`, label: 'Dashboard' },
               { href: `/${slug}/settings`, label: 'Settings' },

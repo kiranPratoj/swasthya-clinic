@@ -24,7 +24,7 @@ export default async function TokenCard({
       .select('id', { count: 'exact', head: true })
       .eq('clinic_id', appointment.clinic_id)
       .eq('booked_for', appointment.booked_for)
-      .eq('status', 'waiting')
+      .in('status', ['booked', 'confirmed', 'in_progress'])
       .lt('token_number', appointment.token_number),
   ]);
 

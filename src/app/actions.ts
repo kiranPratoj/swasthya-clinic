@@ -24,6 +24,11 @@ async function getClinicId(): Promise<string> {
   return id;
 }
 
+async function getClinicSlug(clinicId: string): Promise<string> {
+  const { data: clinic } = await getDb().from('clinics').select('slug').eq('id', clinicId).single();
+  return clinic?.slug ?? '';
+}
+
 // ─── Clinic onboarding ────────────────────────────────────────────────────────
 
 export async function createClinic(data: OnboardingInput): Promise<{ clinicId: string; slug: string }> {
@@ -179,9 +184,143 @@ export async function updateAppointmentStatus(
 
   await auditLog(clinicId, 'doctor', 'status_updated', appointmentId, { status, notes });
 
-  const { data: clinic } = await db.from('clinics').select('slug').eq('id', clinicId).single();
-  revalidatePath(`/${clinic?.slug}/queue`);
-  revalidatePath(`/${clinic?.slug}/admin`);
+  const slug = await getClinicSlug(clinicId);
+  revalidatePath(`/${slug}/queue`);
+  revalidatePath(`/${slug}/admin`);
+}
+
+export async function cancelAppointment(
+  appointmentId: string,
+  reason?: string
+): Promise<void> {
+  const clinicId = await getClinicId();
+  const db = getDb();
+
+  const { error } = await db
+    .from('appointments')
+    .update({ status: 'cancelled' })
+    .eq('id', appointmentId)
+    .eq('clinic_id', clinicId)
+    .select('id')
+    .single();
+
+  if (error) throw new Error(error.message);
+
+  await auditLog(clinicId, 'receptionist', 'appointment_cancelled', appointmentId, {
+    reason: reason?.trim() || null,
+  });
+
+  const slug = await getClinicSlug(clinicId);
+  revalidatePath(`/${slug}/queue`);
+  revalidatePath(`/${slug}/admin`);
+}
+
+export async function markNoShow(appointmentId: string): Promise<void> {
+  const clinicId = await getClinicId();
+  const db = getDb();
+
+  const { error } = await db
+    .from('appointments')
+    .update({ status: 'no_show' })
+    .eq('id', appointmentId)
+    .eq('clinic_id', clinicId)
+    .select('id')
+    .single();
+
+  if (error) throw new Error(error.message);
+
+  await auditLog(clinicId, 'receptionist', 'appointment_no_show', appointmentId);
+
+  const slug = await getClinicSlug(clinicId);
+  revalidatePath(`/${slug}/queue`);
+  revalidatePath(`/${slug}/admin`);
+}
+
+export async function rescheduleAppointment(
+  appointmentId: string,
+  newDate: string,
+  reason?: string
+): Promise<{ newAppointmentId: string; newToken: number }> {
+  const clinicId = await getClinicId();
+  const db = getDb();
+  const normalizedDate = newDate.trim();
+
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(normalizedDate)) {
+    throw new Error('Reschedule date must be in YYYY-MM-DD format.');
+  }
+
+  const { data: currentAppointment, error: appointmentError } = await db
+    .from('appointments')
+    .select('id, clinic_id, patient_id, doctor_id, visit_type, complaint, booked_for, token_number')
+    .eq('id', appointmentId)
+    .eq('clinic_id', clinicId)
+    .single();
+
+  if (appointmentError || !currentAppointment) {
+    throw new Error(appointmentError?.message ?? 'Appointment not found.');
+  }
+
+  const { data: tokenData, error: tokenError } = await db.rpc('next_token_number', {
+    p_clinic_id: clinicId,
+    p_date: normalizedDate,
+  });
+
+  if (tokenError) throw new Error(tokenError.message);
+  const newToken = tokenData ?? 1;
+
+  const { data: newAppointment, error: insertError } = await db
+    .from('appointments')
+    .insert({
+      clinic_id: clinicId,
+      patient_id: currentAppointment.patient_id,
+      doctor_id: currentAppointment.doctor_id,
+      token_number: newToken,
+      visit_type: currentAppointment.visit_type,
+      complaint: currentAppointment.complaint,
+      booked_for: normalizedDate,
+      status: 'confirmed',
+    })
+    .select('id')
+    .single();
+
+  if (insertError || !newAppointment) {
+    throw new Error(insertError?.message ?? 'Could not create the rescheduled appointment.');
+  }
+
+  const { error: updateError } = await db
+    .from('appointments')
+    .update({ status: 'rescheduled' })
+    .eq('id', appointmentId)
+    .eq('clinic_id', clinicId)
+    .select('id')
+    .single();
+
+  if (updateError) throw new Error(updateError.message);
+
+  await auditLog(clinicId, 'receptionist', 'appointment_rescheduled_old', appointmentId, {
+    newAppointmentId: newAppointment.id,
+    oldDate: currentAppointment.booked_for,
+    newDate: normalizedDate,
+    reason: reason?.trim() || null,
+  });
+  await auditLog(clinicId, 'receptionist', 'appointment_rescheduled_new', newAppointment.id, {
+    previousAppointmentId: appointmentId,
+    newToken,
+    oldDate: currentAppointment.booked_for,
+    newDate: normalizedDate,
+    reason: reason?.trim() || null,
+  });
+
+  const slug = await getClinicSlug(clinicId);
+  revalidatePath(`/${slug}/queue`);
+  revalidatePath(`/${slug}/admin`);
+  revalidatePath(`/${slug}/patients`);
+  revalidatePath(`/${slug}/patients/${currentAppointment.patient_id}`);
+
+  return {
+    newAppointmentId: newAppointment.id,
+    newToken,
+  };
 }
 
 // ─── Queries ──────────────────────────────────────────────────────────────────
@@ -250,6 +389,166 @@ export async function getPatientByPhone(phone: string): Promise<PatientWithHisto
     .limit(5);
 
   return { patient: patient as Patient, appointments: (appointments ?? []) as Appointment[] };
+}
+
+export async function searchPatients(
+  query: string
+): Promise<Array<{ id: string; name: string; phone: string; visitCount: number; lastVisit: string | null }>> {
+  const clinicId = await getClinicId();
+  const db = getDb();
+  const trimmedQuery = query.trim();
+
+  if (!trimmedQuery) return [];
+
+  const digitsOnly = trimmedQuery.replace(/\D/g, '');
+  const queries = [
+    db
+      .from('patients')
+      .select('id, name, phone')
+      .eq('clinic_id', clinicId)
+      .ilike('name', `%${trimmedQuery}%`)
+      .limit(20),
+  ];
+
+  if (digitsOnly) {
+    queries.unshift(
+      db
+        .from('patients')
+        .select('id, name, phone')
+        .eq('clinic_id', clinicId)
+        .or(`phone.eq.${digitsOnly},phone.like.${digitsOnly}%`)
+        .limit(20)
+    );
+  }
+
+  const results = await Promise.all(queries);
+  const patients = results.flatMap((result) => {
+    if (result.error) {
+      throw new Error(result.error.message);
+    }
+    return result.data ?? [];
+  });
+
+  const uniquePatients = Array.from(
+    new Map(
+      patients.map((patient) => [
+        patient.id,
+        {
+          id: patient.id,
+          name: patient.name,
+          phone: patient.phone ?? '',
+        },
+      ])
+    ).values()
+  ).slice(0, 20);
+
+  if (uniquePatients.length === 0) return [];
+
+  const patientIds = uniquePatients.map((patient) => patient.id);
+  const { data: appointments, error: appointmentsError } = await db
+    .from('appointments')
+    .select('patient_id, booked_for')
+    .eq('clinic_id', clinicId)
+    .in('patient_id', patientIds)
+    .order('booked_for', { ascending: false });
+
+  if (appointmentsError) throw new Error(appointmentsError.message);
+
+  const metrics = new Map<string, { visitCount: number; lastVisit: string | null }>();
+
+  for (const appointment of appointments ?? []) {
+    const current = metrics.get(appointment.patient_id) ?? {
+      visitCount: 0,
+      lastVisit: null,
+    };
+
+    metrics.set(appointment.patient_id, {
+      visitCount: current.visitCount + 1,
+      lastVisit: current.lastVisit ?? appointment.booked_for,
+    });
+  }
+
+  return uniquePatients.map((patient) => {
+    const patientMetrics = metrics.get(patient.id);
+    return {
+      id: patient.id,
+      name: patient.name,
+      phone: patient.phone,
+      visitCount: patientMetrics?.visitCount ?? 0,
+      lastVisit: patientMetrics?.lastVisit ?? null,
+    };
+  });
+}
+
+export async function getPatientProfile(
+  patientId: string
+): Promise<{ patient: Patient; appointments: Appointment[] } | null> {
+  const clinicId = await getClinicId();
+  const db = getDb();
+
+  const { data: patient, error: patientError } = await db
+    .from('patients')
+    .select('*')
+    .eq('id', patientId)
+    .eq('clinic_id', clinicId)
+    .maybeSingle();
+
+  if (patientError) throw new Error(patientError.message);
+  if (!patient) return null;
+
+  const { data: appointments, error: appointmentsError } = await db
+    .from('appointments')
+    .select('*')
+    .eq('clinic_id', clinicId)
+    .eq('patient_id', patientId)
+    .order('booked_for', { ascending: false })
+    .order('created_at', { ascending: false });
+
+  if (appointmentsError) throw new Error(appointmentsError.message);
+
+  return {
+    patient: patient as Patient,
+    appointments: (appointments ?? []) as Appointment[],
+  };
+}
+
+export async function updatePatient(
+  patientId: string,
+  updates: { name: string; phone: string }
+): Promise<void> {
+  const clinicId = await getClinicId();
+  const db = getDb();
+
+  const { data: patient, error: patientError } = await db
+    .from('patients')
+    .select('id, clinic_id')
+    .eq('id', patientId)
+    .maybeSingle();
+
+  if (patientError) throw new Error(patientError.message);
+  if (!patient || patient.clinic_id !== clinicId) {
+    throw new Error('Patient not found for this clinic.');
+  }
+
+  const { error } = await db
+    .from('patients')
+    .update({
+      name: updates.name.trim(),
+      phone: updates.phone.trim(),
+    })
+    .eq('id', patientId)
+    .eq('clinic_id', clinicId);
+
+  if (error) throw new Error(error.message);
+
+  await auditLog(clinicId, 'receptionist', 'patient_updated', patientId, {
+    name: updates.name.trim(),
+    phone: updates.phone.trim(),
+  });
+
+  const slug = await getClinicSlug(clinicId);
+  revalidatePath(`/${slug}/patients`);
+  revalidatePath(`/${slug}/patients/${patientId}`);
 }
 
 export async function getAppointmentByToken(token: number, date?: string): Promise<QueueItem | null> {
@@ -324,9 +623,9 @@ export async function updateDoctorSettings(formData: FormData): Promise<void> {
     ...(workingHours ? { working_hours: workingHours } : {}),
   }).eq('id', doctor.id);
 
-  const { data: clinic } = await db.from('clinics').select('slug').eq('id', clinicId).single();
-  revalidatePath(`/${clinic?.slug}/settings`);
-  revalidatePath(`/${clinic?.slug}/admin`);
+  const slug = await getClinicSlug(clinicId);
+  revalidatePath(`/${slug}/settings`);
+  revalidatePath(`/${slug}/admin`);
 }
 
 export async function getDoctorForClinic(): Promise<Doctor | null> {

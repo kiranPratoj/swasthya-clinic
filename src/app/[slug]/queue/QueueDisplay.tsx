@@ -5,6 +5,7 @@ import { createClient } from '@supabase/supabase-js';
 import { getClinicQueue, updateAppointmentStatus } from '@/app/actions';
 import type { AppointmentStatus, QueueItem } from '@/lib/types';
 import AppointmentActions from './AppointmentActions';
+import AppointmentActionsMenu from './AppointmentActionsMenu';
 import NewPatientToast from './NewPatientToast';
 import QueueFilters from './QueueFilters';
 
@@ -436,6 +437,14 @@ export default function QueueDisplay({
                     >
                       {isPending ? 'Updating...' : action.label}
                     </button>
+
+                    {item.status !== 'completed' && (
+                      <AppointmentActionsMenu
+                        appointmentId={item.id}
+                        currentStatus={item.status}
+                        patientName={item.patient.name}
+                      />
+                    )}
 
                     <AppointmentActions appointmentId={item.id} />
                   </div>

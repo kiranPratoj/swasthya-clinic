@@ -93,7 +93,7 @@ export default async function AdminDashboard({
         ))}
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: '2rem', alignItems: 'start' }}>
+      <div className="resp-staff-review" style={{ gap: '2rem', alignItems: 'start' }}>
         {/* Recent Appointments */}
         <div style={{ background: 'white', borderRadius: 'var(--radius-lg)', border: '1px solid var(--color-border)', overflow: 'hidden' }}>
           <div style={{ padding: '1.25rem', borderBottom: '1px solid var(--color-border)' }}>
