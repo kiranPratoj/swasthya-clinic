@@ -1,5 +1,6 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
+import { headers } from 'next/headers';
 import {
   sendAppointmentConfirmation,
   sendAppointmentReminder,
@@ -104,7 +105,11 @@ async function logEvent(payload: CommunicationPayload): Promise<void> {
   }
 }
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
+  const clinicIdFromSession = (await headers()).get('x-clinic-id');
+  if (!clinicIdFromSession) {
+    return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+  }
   let appointmentId = '';
   let messageType: RequestBody['type'] = 'confirmation';
   let clinicId: string | null = null;
@@ -136,6 +141,10 @@ export async function POST(request: Request) {
         { success: false, error: appointmentError?.message ?? 'Appointment not found.' },
         { status: 404 }
       );
+    }
+
+    if (appointment.clinic_id !== clinicIdFromSession) {
+      return NextResponse.json({ success: false, error: 'Access denied' }, { status: 403 });
     }
 
     clinicId = appointment.clinic_id;

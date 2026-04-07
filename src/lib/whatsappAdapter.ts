@@ -1,5 +1,3 @@
-'use server';
-
 type SendResult = {
   success: boolean;
   messageId?: string;

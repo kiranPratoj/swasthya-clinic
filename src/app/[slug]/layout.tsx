@@ -49,7 +49,7 @@ export default async function SlugLayout({
           </span>
           <nav className="slug-sub-nav" style={{ display: 'flex', gap: '0.25rem' }}>
             {[
-              { href: `/${slug}`, label: 'Intake' },
+              { href: `/${slug}/intake`, label: 'Intake' },
               { href: `/${slug}/queue`, label: 'Queue' },
               { href: `/${slug}/history`, label: 'History' },
               { href: `/${slug}/admin`, label: 'Dashboard' },
@@ -68,7 +68,18 @@ export default async function SlugLayout({
               </Link>
             ))}
           </nav>
-          <span style={{ color: '#0891b2', fontSize: '0.75rem' }}>Dr. {doctorName}</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+            <span style={{ color: '#0891b2', fontSize: '0.75rem' }}>Dr. {doctorName}</span>
+            <form action="/api/auth/logout" method="POST">
+              <button type="submit" style={{
+                fontSize: '0.7rem', fontWeight: 600, color: '#64748b',
+                background: 'none', border: '1px solid #cbd5e1',
+                borderRadius: '4px', padding: '0.2rem 0.55rem', cursor: 'pointer',
+              }}>
+                Sign out
+              </button>
+            </form>
+          </div>
         </div>
       </div>
 

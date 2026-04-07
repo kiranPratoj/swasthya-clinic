@@ -126,8 +126,8 @@ export default async function AdminDashboard({
                     <td style={{ padding: '1rem' }}>
                       <span style={{ 
                         padding: '0.25rem 0.5rem', borderRadius: '4px', fontSize: '0.75rem', fontWeight: '700',
-                        background: a.status === 'waiting' ? 'var(--color-gold-light)' : a.status === 'consulting' ? 'var(--color-accent-soft)' : 'var(--color-primary-soft)',
-                        color: a.status === 'waiting' ? 'var(--color-gold)' : a.status === 'consulting' ? 'var(--color-accent)' : 'var(--color-primary)'
+                        background: (a.status === 'confirmed' || a.status === 'booked') ? 'var(--color-gold-light)' : a.status === 'in_progress' ? 'var(--color-accent-soft)' : 'var(--color-primary-soft)',
+                        color: (a.status === 'confirmed' || a.status === 'booked') ? 'var(--color-gold)' : a.status === 'in_progress' ? 'var(--color-accent)' : 'var(--color-primary)'
                       }}>
                         {a.status.toUpperCase()}
                       </span>
