@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { createAppointment } from '@/app/actions';
 import { synthesizeKannadaSpeech } from '@/lib/ttsAdapter';
 import type { PatientIntakeDraft, VisitType, VoiceDraft } from '@/lib/types';
+import PatientLookup from './PatientLookup';
 
 const PROCESSING_STEPS = [
   {
@@ -644,6 +645,20 @@ export default function PatientIntakeForm({
             Review the voice draft and update anything the receptionist wants to correct.
           </p>
         </div>
+
+        <PatientLookup
+          onPatientFound={({ name, phone: nextPhone, age: nextAge }) => {
+            if (name) {
+              setPatientName(name);
+            }
+
+            if (nextAge) {
+              setAge(nextAge);
+            }
+
+            setPhone(nextPhone);
+          }}
+        />
 
         <div
           style={{

@@ -1,5 +1,6 @@
-import { getAdminStats, getDoctorForClinic } from '@/app/actions';
+import { getAdminStats, getClinicQueue, getDoctorForClinic } from '@/app/actions';
 import Link from 'next/link';
+import DateNavigator from './DateNavigator';
 
 function getPatientDisplayName(patient: unknown): string {
   if (Array.isArray(patient)) {
@@ -21,10 +22,33 @@ function getPatientDisplayName(patient: unknown): string {
   return 'Patient';
 }
 
-export default async function AdminDashboard({ params }: { params: Promise<{ slug: string }> }) {
+function getTodayIsoDate(): string {
+  return new Date().toISOString().split('T')[0];
+}
+
+function normalizeDateParam(value: string | string[] | undefined): string {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    return getTodayIsoDate();
+  }
+
+  return value;
+}
+
+export default async function AdminDashboard({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ slug: string }>;
+  searchParams: Promise<{ date?: string }>;
+}) {
   const { slug } = await params;
-  const stats = await getAdminStats();
-  const doctor = await getDoctorForClinic();
+  const resolvedSearchParams = await searchParams;
+  const date = normalizeDateParam(resolvedSearchParams.date);
+  const [stats, activeQueue, doctor] = await Promise.all([
+    getAdminStats(date),
+    getClinicQueue(date),
+    getDoctorForClinic(),
+  ]);
 
   const now = new Date();
   const hour = now.getHours();
@@ -47,6 +71,8 @@ export default async function AdminDashboard({ params }: { params: Promise<{ slu
           <Link href={`/${slug}/settings`} className="bda-nav-link" style={{ background: 'white' }}>Settings</Link>
         </div>
       </header>
+
+      <DateNavigator currentDate={date} />
 
       {/* Stats Row */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '1.25rem' }}>
@@ -71,7 +97,12 @@ export default async function AdminDashboard({ params }: { params: Promise<{ slu
         {/* Recent Appointments */}
         <div style={{ background: 'white', borderRadius: 'var(--radius-lg)', border: '1px solid var(--color-border)', overflow: 'hidden' }}>
           <div style={{ padding: '1.25rem', borderBottom: '1px solid var(--color-border)' }}>
-            <h2 style={{ fontSize: '1.125rem', fontWeight: '700' }}>Recent Appointments</h2>
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', alignItems: 'center', flexWrap: 'wrap' }}>
+              <h2 style={{ fontSize: '1.125rem', fontWeight: '700' }}>Recent Appointments</h2>
+              <span style={{ color: 'var(--color-text-muted)', fontSize: '0.9rem', fontWeight: 700 }}>
+                {activeQueue.length} active in queue
+              </span>
+            </div>
           </div>
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.875rem' }}>

@@ -42,7 +42,7 @@ export default function HomePage() {
       </section>
 
       {/* How it works strip */}
-      <section style={{ background: 'white', borderY: '1px solid var(--color-border)', padding: '3rem 1rem', borderRadius: 'var(--radius-xl)', border: '1px solid var(--color-border)' }}>
+      <section style={{ background: 'white', borderTop: '1px solid var(--color-border)', borderBottom: '1px solid var(--color-border)', padding: '3rem 1rem' }}>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '2rem', maxWidth: '1000px', margin: '0 auto' }}>
           {[
             { step: '1', title: 'Speak', desc: 'Receptionist speaks — patient registered in seconds' },

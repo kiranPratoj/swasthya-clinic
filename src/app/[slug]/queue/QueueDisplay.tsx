@@ -1,9 +1,11 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { createClient } from '@supabase/supabase-js';
-import { updateAppointmentStatus } from '@/app/actions';
+import { getClinicQueue, updateAppointmentStatus } from '@/app/actions';
 import type { AppointmentStatus, QueueItem } from '@/lib/types';
+import NewPatientToast from './NewPatientToast';
+import QueueFilters from './QueueFilters';
 
 type QueueDisplayProps = {
   initialQueue: QueueItem[];
@@ -88,12 +90,20 @@ export default function QueueDisplay({
   clinicId,
 }: QueueDisplayProps) {
   const [queue, setQueue] = useState(initialQueue);
+  const [filteredQueue, setFilteredQueue] = useState(initialQueue);
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [toastQueue, setToastQueue] = useState<Array<{ id: string; token: number; name: string }>>([]);
+  const queueRef = useRef(initialQueue);
 
   useEffect(() => {
     setQueue(initialQueue);
+    setFilteredQueue(initialQueue);
   }, [initialQueue]);
+
+  useEffect(() => {
+    queueRef.current = queue;
+  }, [queue]);
 
   useEffect(() => {
     const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -104,6 +114,25 @@ export default function QueueDisplay({
     }
 
     const supabase = createClient(url, anonKey);
+
+    async function refreshQueueFromServer() {
+      const latestQueue = await getClinicQueue();
+      const currentIds = new Set(queueRef.current.map((item) => item.id));
+      const newItems = latestQueue
+        .filter((item) => !currentIds.has(item.id))
+        .map((item) => ({
+          id: item.id,
+          token: item.token_number,
+          name: item.patient.name,
+        }));
+
+      setQueue(latestQueue);
+
+      if (newItems.length > 0) {
+        setToastQueue((current) => [...current, ...newItems]);
+      }
+    }
+
     const channel = supabase
       .channel(`clinic-queue-${clinicId}`)
       .on(
@@ -115,7 +144,7 @@ export default function QueueDisplay({
           filter: `clinic_id=eq.${clinicId}`,
         },
         () => {
-          window.location.reload();
+          void refreshQueueFromServer();
         }
       )
       .on(
@@ -132,7 +161,7 @@ export default function QueueDisplay({
           const nextStatus = isAppointmentStatus(nextRecord.status) ? nextRecord.status : null;
 
           if (!nextId || !nextStatus) {
-            window.location.reload();
+            void refreshQueueFromServer();
             return;
           }
 
@@ -152,7 +181,7 @@ export default function QueueDisplay({
             });
 
             if (!matched) {
-              window.location.reload();
+              void refreshQueueFromServer();
               return currentQueue;
             }
 
@@ -203,7 +232,7 @@ export default function QueueDisplay({
     }
   }
 
-  const sortedQueue = [...queue].sort((left, right) => left.token_number - right.token_number);
+  const sortedQueue = [...filteredQueue].sort((left, right) => left.token_number - right.token_number);
   const todayLabel = formatDateLabel(new Date());
 
   return (
@@ -237,6 +266,8 @@ export default function QueueDisplay({
         </div>
       </header>
 
+      <QueueFilters queue={queue} onFiltered={setFilteredQueue} />
+
       {actionError && (
         <div
           style={{
@@ -251,6 +282,13 @@ export default function QueueDisplay({
           {actionError}
         </div>
       )}
+
+      <NewPatientToast
+        items={toastQueue}
+        onDismiss={(id) => {
+          setToastQueue((current) => current.filter((item) => item.id !== id));
+        }}
+      />
 
       {sortedQueue.length === 0 ? (
         <div
