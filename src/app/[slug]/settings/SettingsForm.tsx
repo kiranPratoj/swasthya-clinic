@@ -18,33 +18,31 @@ const DAYS: { id: Day; label: string }[] = [
 export default function SettingsForm({ doctor }: { doctor: Doctor | null }) {
   const [loading, setLoading] = useState(false);
   const [saved, setSaved] = useState(false);
+  const DEFAULT_HOURS: WorkingHours = {
+    mon: { open: true,  start: '09:00', end: '17:00' },
+    tue: { open: true,  start: '09:00', end: '17:00' },
+    wed: { open: true,  start: '09:00', end: '17:00' },
+    thu: { open: true,  start: '09:00', end: '17:00' },
+    fri: { open: true,  start: '09:00', end: '17:00' },
+    sat: { open: true,  start: '09:00', end: '13:00' },
+    sun: { open: false, start: '09:00', end: '13:00' },
+  };
+
   const [workingHours, setWorkingHours] = useState<WorkingHours>(
-    doctor?.working_hours || {
-      mon: { open: '09:00', close: '17:00' },
-      tue: { open: '09:00', close: '17:00' },
-      wed: { open: '09:00', close: '17:00' },
-      thu: { open: '09:00', close: '17:00' },
-      fri: { open: '09:00', close: '17:00' },
-      sat: { open: '09:00', close: '13:00' },
-    }
+    doctor?.working_hours || DEFAULT_HOURS
   );
 
   const handleDayToggle = (day: Day) => {
-    setWorkingHours(prev => {
-      const next = { ...prev };
-      if (next[day]) {
-        delete next[day];
-      } else {
-        next[day] = { open: '09:00', close: '17:00' };
-      }
-      return next;
-    });
-  };
-
-  const handleTimeChange = (day: Day, field: 'open' | 'close', value: string) => {
     setWorkingHours(prev => ({
       ...prev,
-      [day]: { ...prev[day], [field]: value }
+      [day]: { ...(prev[day] ?? { start: '09:00', end: '17:00' }), open: !prev[day]?.open },
+    }));
+  };
+
+  const handleTimeChange = (day: Day, field: 'start' | 'end', value: string) => {
+    setWorkingHours(prev => ({
+      ...prev,
+      [day]: { ...prev[day], [field]: value },
     }));
   };
 
@@ -131,30 +129,30 @@ export default function SettingsForm({ doctor }: { doctor: Doctor | null }) {
               borderBottom: id === 'sun' ? 'none' : '1px solid var(--color-bg)'
             }}>
               <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', margin: 0, cursor: 'pointer', textTransform: 'none' }}>
-                <input 
-                  type="checkbox" 
-                  checked={!!workingHours[id]} 
+                <input
+                  type="checkbox"
+                  checked={!!workingHours[id]?.open}
                   onChange={() => handleDayToggle(id)}
                   style={{ width: 'auto' }}
                 />
                 {label}
               </label>
               
-              <div style={{ opacity: workingHours[id] ? 1 : 0.4 }}>
-                <input 
-                  type="time" 
-                  value={workingHours[id]?.open || '09:00'} 
-                  disabled={!workingHours[id]}
-                  onChange={(e) => handleTimeChange(id, 'open', e.target.value)}
+              <div style={{ opacity: workingHours[id]?.open ? 1 : 0.4 }}>
+                <input
+                  type="time"
+                  value={workingHours[id]?.start ?? '09:00'}
+                  disabled={!workingHours[id]?.open}
+                  onChange={(e) => handleTimeChange(id, 'start', e.target.value)}
                 />
               </div>
-              
-              <div style={{ opacity: workingHours[id] ? 1 : 0.4 }}>
-                <input 
-                  type="time" 
-                  value={workingHours[id]?.close || '17:00'} 
-                  disabled={!workingHours[id]}
-                  onChange={(e) => handleTimeChange(id, 'close', e.target.value)}
+
+              <div style={{ opacity: workingHours[id]?.open ? 1 : 0.4 }}>
+                <input
+                  type="time"
+                  value={workingHours[id]?.end ?? '17:00'}
+                  disabled={!workingHours[id]?.open}
+                  onChange={(e) => handleTimeChange(id, 'end', e.target.value)}
                 />
               </div>
             </div>

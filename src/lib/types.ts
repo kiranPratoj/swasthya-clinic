@@ -1,14 +1,20 @@
 // Swasthya Clinic — Domain Types
 // Single source of truth. Match CONTRACTS.md exactly.
 
+export type WorkingHourDay = {
+  open: boolean;
+  start: string; // "HH:MM"
+  end: string;   // "HH:MM"
+};
+
 export type WorkingHours = {
-  mon?: { open: string; close: string };
-  tue?: { open: string; close: string };
-  wed?: { open: string; close: string };
-  thu?: { open: string; close: string };
-  fri?: { open: string; close: string };
-  sat?: { open: string; close: string };
-  sun?: { open: string; close: string };
+  mon?: WorkingHourDay;
+  tue?: WorkingHourDay;
+  wed?: WorkingHourDay;
+  thu?: WorkingHourDay;
+  fri?: WorkingHourDay;
+  sat?: WorkingHourDay;
+  sun?: WorkingHourDay;
 };
 
 export type Clinic = {
@@ -121,4 +127,11 @@ export type OnboardingInput = {
 
 export type QueueItem = Appointment & {
   patient: Patient;
+};
+
+// ─── Patient lookup (phone search result) ────────────────────────────────────
+
+export type PatientWithHistory = {
+  patient: Patient;
+  appointments: Appointment[];
 };

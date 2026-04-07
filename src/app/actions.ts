@@ -9,6 +9,8 @@ import type {
   AppointmentStatus,
   Doctor,
   OnboardingInput,
+  Patient,
+  PatientWithHistory,
   QueueItem,
 } from '@/lib/types';
 
@@ -154,13 +156,25 @@ export async function updateAppointmentStatus(
   const update: Partial<Appointment> = { status };
   if (notes !== undefined) update.notes = notes;
 
-  const { error } = await db
+  const { data: appt, error } = await db
     .from('appointments')
     .update(update)
     .eq('id', appointmentId)
-    .eq('clinic_id', clinicId);
+    .eq('clinic_id', clinicId)
+    .select('patient_id, complaint')
+    .single();
 
   if (error) throw new Error(error.message);
+
+  // Auto-populate visit_history when appointment is marked done
+  if (status === 'done' && appt) {
+    await db.from('visit_history').insert({
+      clinic_id: clinicId,
+      patient_id: appt.patient_id,
+      appointment_id: appointmentId,
+      summary: notes?.trim() || appt.complaint,
+    });
+  }
 
   await auditLog(clinicId, 'doctor', 'status_updated', appointmentId, { status, notes });
 
@@ -211,6 +225,30 @@ export async function getPatientHistory(phone: string): Promise<Appointment[]> {
 
   if (error) throw new Error(error.message);
   return data ?? [];
+}
+
+export async function getPatientByPhone(phone: string): Promise<PatientWithHistory | null> {
+  const clinicId = await getClinicId();
+  const db = getDb();
+
+  const { data: patient } = await db
+    .from('patients')
+    .select('*')
+    .eq('clinic_id', clinicId)
+    .eq('phone', phone)
+    .maybeSingle();
+
+  if (!patient) return null;
+
+  const { data: appointments } = await db
+    .from('appointments')
+    .select('*')
+    .eq('clinic_id', clinicId)
+    .eq('patient_id', patient.id)
+    .order('booked_for', { ascending: false })
+    .limit(5);
+
+  return { patient: patient as Patient, appointments: (appointments ?? []) as Appointment[] };
 }
 
 export async function getAppointmentByToken(token: number, date?: string): Promise<QueueItem | null> {
