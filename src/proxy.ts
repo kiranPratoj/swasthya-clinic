@@ -4,18 +4,20 @@ import { createClient } from '@supabase/supabase-js';
 const PUBLIC_PATHS = ['/onboard', '/api', '/_next', '/favicon', '/file.svg', '/globe.svg'];
 
 function isPublicPath(pathname: string) {
-  return PUBLIC_PATHS.some(p => pathname.startsWith(p));
+  return PUBLIC_PATHS.some((p) => pathname.startsWith(p));
 }
 
 function getSlugFromHost(host: string): string | null {
-  // drsharma.swasthya-clinic.vercel.app → drsharma
-  // drsharma.swasthya.app → drsharma
-  // localhost:3000 → null (dev: no tenant isolation)
   if (host.includes('localhost') || host.includes('127.0.0.1')) return null;
 
   const parts = host.split('.');
-  if (parts.length >= 3) return parts[0]; // subdomain
-  return null; // custom domain — use full host
+  if (parts.length >= 3) return parts[0];
+  return null;
+}
+
+function getSlugFromPathname(pathname: string): string | null {
+  const segments = pathname.split('/').filter(Boolean);
+  return segments[0] ?? null;
 }
 
 export async function proxy(request: NextRequest) {
@@ -24,10 +26,10 @@ export async function proxy(request: NextRequest) {
   if (isPublicPath(pathname)) return NextResponse.next();
 
   const host = request.headers.get('host') ?? '';
-  const slug = getSlugFromHost(host);
+  const isLocalhost = host.includes('localhost') || host.includes('127.0.0.1');
+  const slug = isLocalhost ? getSlugFromPathname(pathname) : getSlugFromHost(host);
 
-  // Dev: skip tenant resolution
-  if (!slug && (host.includes('localhost') || host.includes('127.0.0.1'))) {
+  if (!slug && isLocalhost) {
     return NextResponse.next();
   }
 
