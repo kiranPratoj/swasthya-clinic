@@ -47,10 +47,11 @@ export default async function SlugLayout({
               <span style={{ fontWeight: 400, color: '#0891b2', marginLeft: '0.5rem' }}>· {ctx.clinic.speciality}</span>
             )}
           </span>
-          <nav style={{ display: 'flex', gap: '0.25rem' }}>
+          <nav className="slug-sub-nav" style={{ display: 'flex', gap: '0.25rem' }}>
             {[
               { href: `/${slug}`, label: 'Intake' },
               { href: `/${slug}/queue`, label: 'Queue' },
+              { href: `/${slug}/history`, label: 'History' },
               { href: `/${slug}/admin`, label: 'Dashboard' },
               { href: `/${slug}/settings`, label: 'Settings' },
             ].map(({ href, label }) => (
