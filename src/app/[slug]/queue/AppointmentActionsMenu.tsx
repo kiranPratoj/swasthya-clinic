@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { cancelAppointment, markNoShow, rescheduleAppointment } from '@/app/actions';
 import type { AppointmentStatus } from '@/lib/types';
@@ -64,6 +64,18 @@ export default function AppointmentActionsMenu({
     }
   }
 
+  const actionBtn: React.CSSProperties = {
+    flex: 1, padding: '0.6rem 0.875rem', border: 'none',
+    borderRadius: 'var(--radius-md)', color: 'white',
+    fontWeight: 700, fontSize: '0.875rem', opacity: isLoading ? 0.6 : 1,
+  };
+  const ghostBtn: React.CSSProperties = {
+    flex: 1, padding: '0.6rem 0.875rem',
+    border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)',
+    background: 'white', color: 'var(--color-text)',
+    fontWeight: 700, fontSize: '0.875rem',
+  };
+
   return (
     <div ref={rootRef} style={{ position: 'relative', justifySelf: 'end' }}>
       <button
@@ -108,14 +120,34 @@ export default function AppointmentActionsMenu({
         >
           {mode === 'idle' && (
             <>
-              <button type="button" disabled={isLoading} onClick={() => setMode('cancel')}>Cancel</button>
-              <button type="button" disabled={isLoading} onClick={() => void runAction(() => markNoShow(appointmentId))}>No-show</button>
-              <button type="button" disabled={isLoading} onClick={() => setMode('reschedule')}>Reschedule</button>
+              {[
+                { label: 'Cancel appointment', color: '#dc2626', bg: '#fef2f2', onClick: () => setMode('cancel') },
+                { label: 'Mark as no-show',    color: '#b45309', bg: '#fffbeb', onClick: () => void runAction(() => markNoShow(appointmentId)) },
+                { label: 'Reschedule',         color: '#0369a1', bg: '#f0f9ff', onClick: () => setMode('reschedule') },
+              ].map(({ label, color, bg, onClick }) => (
+                <button
+                  key={label}
+                  type="button"
+                  disabled={isLoading}
+                  onClick={onClick}
+                  style={{
+                    width: '100%', textAlign: 'left', padding: '0.65rem 0.875rem',
+                    borderRadius: 'var(--radius-md)', border: 'none',
+                    background: bg, color, fontWeight: 700, fontSize: '0.875rem',
+                    opacity: isLoading ? 0.6 : 1,
+                  }}
+                >
+                  {label}
+                </button>
+              ))}
             </>
           )}
 
           {mode === 'cancel' && (
             <>
+              <p style={{ fontSize: '0.825rem', fontWeight: 700, color: 'var(--color-text-muted)' }}>
+                Cancel for {patientName}?
+              </p>
               <input
                 type="text"
                 value={reason}
@@ -124,13 +156,16 @@ export default function AppointmentActionsMenu({
                 placeholder="Reason (optional)"
               />
               <div style={{ display: 'flex', gap: '0.5rem' }}>
-                <button type="button" disabled={isLoading} onClick={() => setMode('idle')}>Back</button>
+                <button type="button" disabled={isLoading} onClick={() => setMode('idle')} style={ghostBtn}>
+                  Back
+                </button>
                 <button
                   type="button"
                   disabled={isLoading}
                   onClick={() => void runAction(() => cancelAppointment(appointmentId, reason))}
+                  style={{ ...actionBtn, background: '#dc2626' }}
                 >
-                  {isLoading ? 'Saving...' : 'Confirm'}
+                  {isLoading ? 'Saving...' : 'Confirm cancel'}
                 </button>
               </div>
             </>
@@ -138,6 +173,9 @@ export default function AppointmentActionsMenu({
 
           {mode === 'reschedule' && (
             <>
+              <p style={{ fontSize: '0.825rem', fontWeight: 700, color: 'var(--color-text-muted)' }}>
+                Reschedule for {patientName}
+              </p>
               <input type="date" value={newDate} disabled={isLoading} onChange={(event) => setNewDate(event.target.value)} />
               <input
                 type="text"
@@ -147,17 +185,17 @@ export default function AppointmentActionsMenu({
                 placeholder="Reason (optional)"
               />
               <div style={{ display: 'flex', gap: '0.5rem' }}>
-                <button type="button" disabled={isLoading} onClick={() => setMode('idle')}>Back</button>
+                <button type="button" disabled={isLoading} onClick={() => setMode('idle')} style={ghostBtn}>
+                  Back
+                </button>
                 <button
                   type="button"
                   disabled={isLoading}
                   onClick={() => {
-                    if (!newDate) {
-                      setError('Choose a new appointment date.');
-                      return;
-                    }
+                    if (!newDate) { setError('Choose a new date.'); return; }
                     void runAction(() => rescheduleAppointment(appointmentId, newDate, reason).then(() => undefined));
                   }}
+                  style={{ ...actionBtn, background: 'var(--color-primary)' }}
                 >
                   {isLoading ? 'Saving...' : 'Confirm'}
                 </button>

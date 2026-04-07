@@ -30,6 +30,19 @@ function formatVisitType(value: QueueItem['visit_type']): string {
     .join(' ');
 }
 
+function formatStatusLabel(status: AppointmentStatus): string {
+  const labels: Record<AppointmentStatus, string> = {
+    booked:      'Booked',
+    confirmed:   'Waiting',
+    in_progress: 'In Progress',
+    completed:   'Done',
+    cancelled:   'Cancelled',
+    no_show:     'No Show',
+    rescheduled: 'Rescheduled',
+  };
+  return labels[status] ?? status;
+}
+
 function isAppointmentStatus(value: unknown): value is AppointmentStatus {
   return value === 'booked' || value === 'confirmed' || value === 'in_progress' || value === 'completed' || value === 'cancelled' || value === 'no_show' || value === 'rescheduled';
 }
@@ -407,7 +420,7 @@ export default function QueueDisplay({
                           textTransform: 'capitalize',
                         }}
                       >
-                        {item.status}
+                        {formatStatusLabel(item.status)}
                       </span>
                     </div>
                   </div>
