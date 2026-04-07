@@ -8,16 +8,16 @@ const db = createClient(URL, KEY, { auth: { persistSession: false } });
 const TODAY = new Date().toISOString().split('T')[0];
 
 const PATIENTS = [
-  { name: 'Ravi Kumar',      age: 45, phone: '9845001001', complaint: 'Follow-up for hypertension, BP review',         visit_type: 'follow-up',  status: 'done',       token: 1  },
-  { name: 'Meera Nair',      age: 32, phone: '9845001002', complaint: 'Fever and body pain since 2 days',              visit_type: 'walk-in',    status: 'done',       token: 2  },
-  { name: 'Suresh Babu',     age: 58, phone: '9845001003', complaint: 'Diabetes quarterly checkup',                    visit_type: 'booked',     status: 'done',       token: 3  },
-  { name: 'Kavitha Reddy',   age: 29, phone: '9845001004', complaint: 'Severe headache and nausea since morning',      visit_type: 'walk-in',    status: 'consulting', token: 4  },
-  { name: 'Anand Krishnan',  age: 41, phone: '9845001005', complaint: 'Post-surgery wound check',                      visit_type: 'follow-up',  status: 'waiting',    token: 5  },
-  { name: 'Lakshmi Devi',    age: 67, phone: '9845001006', complaint: 'Joint pain in knees, difficulty walking',       visit_type: 'walk-in',    status: 'waiting',    token: 6  },
-  { name: 'Mohammed Irfan',  age: 35, phone: '9845001007', complaint: 'Chest tightness and shortness of breath',       visit_type: 'emergency',  status: 'waiting',    token: 7  },
-  { name: 'Preethi Shetty',  age: 24, phone: '9845001008', complaint: 'Routine prenatal checkup, 20 weeks',            visit_type: 'booked',     status: 'waiting',    token: 8  },
-  { name: 'Venkatesh Rao',   age: 52, phone: '9845001009', complaint: 'Persistent cough and mild fever for a week',   visit_type: 'walk-in',    status: 'waiting',    token: 9  },
-  { name: 'Geetha Murthy',   age: 38, phone: '9845001010', complaint: 'Thyroid test results review',                   visit_type: 'follow-up',  status: 'waiting',    token: 10 },
+  { name: 'Ravi Kumar',      age: 45, phone: '9845001001', complaint: 'Follow-up for hypertension, BP review',         visit_type: 'follow-up',  status: 'completed',  token: 1  },
+  { name: 'Meera Nair',      age: 32, phone: '9845001002', complaint: 'Fever and body pain since 2 days',              visit_type: 'walk-in',    status: 'completed',  token: 2  },
+  { name: 'Suresh Babu',     age: 58, phone: '9845001003', complaint: 'Diabetes quarterly checkup',                    visit_type: 'booked',     status: 'completed',  token: 3  },
+  { name: 'Kavitha Reddy',   age: 29, phone: '9845001004', complaint: 'Severe headache and nausea since morning',      visit_type: 'walk-in',    status: 'in_progress',token: 4  },
+  { name: 'Anand Krishnan',  age: 41, phone: '9845001005', complaint: 'Post-surgery wound check',                      visit_type: 'follow-up',  status: 'confirmed',  token: 5  },
+  { name: 'Lakshmi Devi',    age: 67, phone: '9845001006', complaint: 'Joint pain in knees, difficulty walking',       visit_type: 'walk-in',    status: 'confirmed',  token: 6  },
+  { name: 'Mohammed Irfan',  age: 35, phone: '9845001007', complaint: 'Chest tightness and shortness of breath',       visit_type: 'walk-in',    status: 'confirmed',  token: 7  },
+  { name: 'Preethi Shetty',  age: 24, phone: '9845001008', complaint: 'Routine prenatal checkup, 20 weeks',            visit_type: 'booked',     status: 'confirmed',  token: 8  },
+  { name: 'Venkatesh Rao',   age: 52, phone: '9845001009', complaint: 'Persistent cough and mild fever for a week',   visit_type: 'walk-in',    status: 'confirmed',  token: 9  },
+  { name: 'Geetha Murthy',   age: 38, phone: '9845001010', complaint: 'Thyroid test results review',                   visit_type: 'follow-up',  status: 'confirmed',  token: 10 },
 ];
 
 async function run() {
