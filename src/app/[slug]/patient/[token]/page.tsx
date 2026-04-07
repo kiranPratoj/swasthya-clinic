@@ -64,7 +64,7 @@ export default async function PatientTokenPage({
   }
 
   return (
-    <main style={{ padding: '3rem 1rem 5rem' }}>
+    <main style={{ minHeight: '70vh', display: 'grid', placeItems: 'center', padding: '2rem 1rem' }}>
       <TokenCard appointment={appointment} />
     </main>
   );

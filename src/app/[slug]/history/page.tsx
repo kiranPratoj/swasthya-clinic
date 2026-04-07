@@ -1,8 +1,7 @@
 import { getPatientHistory } from '@/app/actions';
 import type { Appointment } from '@/lib/types';
 
-export default async function PatientHistoryPage({
-  params,
+export default async function HistoryPage({
   searchParams,
 }: {
   params: Promise<{ slug: string }>;

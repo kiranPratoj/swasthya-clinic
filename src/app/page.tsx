@@ -13,7 +13,7 @@ function StethoscopeIcon() {
 
 export default function HomePage() {
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '4rem', paddingBottom: '4rem' }}>
+    <div className="max-w-7xl px-4" style={{ display: 'flex', flexDirection: 'column', gap: '4rem', paddingBottom: '4rem' }}>
       {/* Hero Section */}
       <section style={{ textAlign: 'center', padding: '4rem 1rem 2rem', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1.5rem' }}>
         <StethoscopeIcon />

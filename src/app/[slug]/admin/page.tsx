@@ -126,10 +126,10 @@ export default async function AdminDashboard({
                     <td style={{ padding: '1rem' }}>
                       <span style={{ 
                         padding: '0.25rem 0.5rem', borderRadius: '4px', fontSize: '0.75rem', fontWeight: '700',
-                        background: (a.status === 'confirmed' || a.status === 'booked') ? 'var(--color-gold-light)' : a.status === 'in_progress' ? 'var(--color-accent-soft)' : 'var(--color-primary-soft)',
-                        color: (a.status === 'confirmed' || a.status === 'booked') ? 'var(--color-gold)' : a.status === 'in_progress' ? 'var(--color-accent)' : 'var(--color-primary)'
+                        background: (a.status === 'confirmed' || a.status === 'booked') ? 'var(--color-gold-light)' : a.status === 'in_progress' ? 'var(--color-accent-soft)' : a.status === 'completed' ? '#dcfce7' : 'var(--color-primary-soft)',
+                        color: (a.status === 'confirmed' || a.status === 'booked') ? 'var(--color-gold)' : a.status === 'in_progress' ? 'var(--color-accent)' : a.status === 'completed' ? '#166534' : 'var(--color-text-muted)'
                       }}>
-                        {a.status.toUpperCase()}
+                        {({'booked': 'Booked', 'confirmed': 'Waiting', 'in_progress': 'Consulting', 'completed': 'Done', 'cancelled': 'Cancelled', 'no_show': 'No Show', 'rescheduled': 'Rescheduled'} as Record<string, string>)[a.status] ?? a.status}
                       </span>
                     </td>
                     <td style={{ padding: '1rem', color: 'var(--color-text-muted)' }}>
@@ -152,27 +152,34 @@ export default async function AdminDashboard({
         {/* Chart */}
         <div style={{ background: 'white', padding: '1.5rem', borderRadius: 'var(--radius-lg)', border: '1px solid var(--color-border)' }}>
           <h2 style={{ fontSize: '1.125rem', fontWeight: '700', marginBottom: '1.5rem' }}>Patients by Hour</h2>
-          <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', height: '100px', paddingBottom: '20px', borderBottom: '1px solid var(--color-border)' }}>
+          <div style={{ display: 'flex', alignItems: 'flex-end', gap: '0.3rem', height: '120px', borderBottom: '1px solid var(--color-border)', paddingBottom: '0' }}>
             {[9, 10, 11, 12, 13, 14, 15, 16, 17, 18].map((h) => {
               const count = stats.byHour[h] || 0;
-              const height = count > 0 ? Math.max(4, (count / maxCount) * 80) : 0;
+              const height = count > 0 ? Math.max(8, (count / maxCount) * 100) : 4;
+              const label = h <= 12 ? `${h === 12 ? 12 : h}${h < 12 ? 'a' : 'p'}` : `${h - 12}p`;
               return (
-                <div key={h} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flex: 1, gap: '0.5rem' }}>
-                  <div style={{ 
-                    width: '60%', 
-                    background: count > 0 ? 'var(--color-primary)' : '#e2e8f0', 
+                <div key={h} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flex: 1, gap: '0.3rem', justifyContent: 'flex-end', height: '100%' }}>
+                  {count > 0 && <span style={{ fontSize: '0.65rem', fontWeight: 700, color: 'var(--color-primary)' }}>{count}</span>}
+                  <div style={{
+                    width: '100%',
+                    background: count > 0 ? 'var(--color-primary)' : 'var(--color-border)',
                     height: `${height}px`,
-                    borderRadius: '2px 2px 0 0',
-                  }} title={`${h}:00 - ${count} patients`} />
+                    borderRadius: '3px 3px 0 0',
+                    opacity: count > 0 ? 1 : 0.4,
+                  }} title={`${h}:00 — ${count} patient${count !== 1 ? 's' : ''}`} />
                 </div>
               );
             })}
           </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '0.75rem', fontSize: '0.7rem', fontWeight: '600', color: 'var(--color-text-muted)' }}>
-            <span>9 AM</span>
-            <span>12 PM</span>
-            <span>3 PM</span>
-            <span>6 PM</span>
+          <div style={{ display: 'flex', gap: '0.3rem', marginTop: '0.4rem' }}>
+            {[9, 10, 11, 12, 13, 14, 15, 16, 17, 18].map((h) => {
+              const label = h === 12 ? '12p' : h < 12 ? `${h}a` : `${h - 12}p`;
+              return (
+                <div key={h} style={{ flex: 1, textAlign: 'center', fontSize: '0.62rem', fontWeight: 600, color: 'var(--color-text-muted)' }}>
+                  {label}
+                </div>
+              );
+            })}
           </div>
         </div>
       </div>

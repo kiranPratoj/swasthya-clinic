@@ -79,68 +79,36 @@ export default function AppointmentActions({
   }
 
   return (
-    <div
-      style={{
-        display: 'grid',
-        gap: '0.5rem',
-        paddingTop: '0.75rem',
-        borderTop: '1px solid var(--color-bg)',
-      }}
-    >
-      <div
-        style={{
-          display: 'flex',
-          gap: '0.6rem',
-          alignItems: 'center',
-          flexWrap: 'wrap',
-        }}
-      >
+    <div style={{ borderTop: '1px solid var(--color-border)', paddingTop: '0.6rem', display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+      <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
+        <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--color-text-muted)', whiteSpace: 'nowrap' }}>📱 WhatsApp</span>
         <select
           value={selectedType}
           onChange={(event) => setSelectedType(event.target.value as AppointmentActionType)}
           disabled={isSending}
           aria-label="Send WhatsApp"
-          style={{
-            minWidth: '12rem',
-          }}
+          style={{ flex: 1, fontSize: '0.8rem', padding: '0.3rem 0.5rem' }}
         >
           {ACTION_OPTIONS.map((option) => (
-            <option key={option.value} value={option.value}>
-              Send WhatsApp: {option.label}
-            </option>
+            <option key={option.value} value={option.value}>{option.label}</option>
           ))}
         </select>
-
         <button
           type="button"
           onClick={() => void handleSend()}
           disabled={isSending}
           style={{
-            border: 'none',
-            borderRadius: 'var(--radius-md)',
-            padding: '0.8rem 1rem',
+            border: 'none', borderRadius: 'var(--radius-sm)',
+            padding: '0.35rem 0.7rem', fontSize: '0.8rem',
             background: isSent ? 'var(--color-accent)' : 'var(--color-primary)',
-            color: 'white',
-            fontWeight: 800,
-            boxShadow: 'var(--shadow-sm)',
-            opacity: isSending ? 0.75 : 1,
+            color: 'white', fontWeight: 700,
+            opacity: isSending ? 0.7 : 1, whiteSpace: 'nowrap',
           }}
         >
-          {isSending ? 'Sending...' : isSent ? 'Sent ✓' : 'Send'}
+          {isSending ? '...' : isSent ? '✓ Sent' : 'Send'}
         </button>
       </div>
-
-      {sendError && (
-        <p
-          style={{
-            color: 'var(--color-error)',
-            fontSize: '0.88rem',
-            fontWeight: 600,
-          }}
-        >
-          {sendError}
-        </p>
-      )}
+      {sendError && <p style={{ color: 'var(--color-error)', fontSize: '0.75rem', fontWeight: 600 }}>{sendError}</p>}
     </div>
   );
 }

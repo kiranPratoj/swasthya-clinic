@@ -20,16 +20,6 @@ function getTodayIsoDate(): string {
   return new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().split('T')[0];
 }
 
-function getMinDate(): string {
-  return getTodayIsoDate();
-}
-
-function getMaxDate(): string {
-  const d = new Date();
-  d.setDate(d.getDate() + 30);
-  return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().split('T')[0];
-}
-
 function formatDate(iso: string): string {
   return new Date(iso + 'T00:00:00').toLocaleDateString('en-IN', {
     weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
@@ -49,6 +39,12 @@ export default function BookingForm({ doctorId, slug, clinicName }: Props) {
   async function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError(null);
+
+    if (!/^\d{10}$/.test(phone)) {
+      setError('Please enter a valid 10-digit mobile number.');
+      return;
+    }
+
     setSubmitting(true);
 
     try {
@@ -74,46 +70,53 @@ export default function BookingForm({ doctorId, slug, clinicName }: Props) {
     }
   }
 
+  const resetForm = () => {
+    setResult(null);
+    setName('');
+    setPhone('');
+    setComplaint('');
+    setVisitType('booked');
+    setBookedFor(getTodayIsoDate());
+    setError(null);
+  };
+
   if (result) {
     return (
       <div style={{
-        background: 'white', borderRadius: 'var(--radius-xl)',
-        border: '1px solid var(--color-border)', padding: '2rem',
-        textAlign: 'center', display: 'flex', flexDirection: 'column', gap: '1rem',
+        maxWidth: '480px', margin: '0 auto', background: 'white',
+        borderRadius: 'var(--radius-xl)', border: '1px solid var(--color-border)',
+        padding: '2.5rem 1.5rem', textAlign: 'center', boxShadow: 'var(--shadow-md)',
+        display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1.5rem'
       }}>
-        <div style={{
-          width: '5rem', height: '5rem', borderRadius: '999px',
-          background: 'var(--color-primary)', color: 'white',
-          display: 'grid', placeItems: 'center', margin: '0 auto',
-          fontSize: '2.5rem', fontWeight: 900,
+        <div style={{ color: 'var(--color-success)', fontWeight: '800', fontSize: '1.25rem' }}>
+          ✓ Booking Confirmed
+        </div>
+        
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+          <div style={{ fontSize: '0.875rem', fontWeight: '700', color: 'var(--color-text-muted)', letterSpacing: '0.1em' }}>TOKEN</div>
+          <div style={{ fontSize: '5rem', fontWeight: '800', color: 'var(--color-primary)', lineHeight: 1 }}>
+            {result.tokenNumber}
+          </div>
+        </div>
+
+        <div style={{ fontSize: '1rem', color: 'var(--color-text)' }}>
+          <p style={{ fontWeight: '700' }}>Dr. {doctorId === 'mock' ? 'Doctor' : 'Doctor'}</p>
+          <p style={{ color: 'var(--color-text-muted)', marginTop: '0.25rem' }}>{formatDate(result.bookedFor)}</p>
+        </div>
+
+        <div style={{ 
+          background: 'var(--color-bg)', padding: '1rem', borderRadius: 'var(--radius-lg)', 
+          fontSize: '0.875rem', color: 'var(--color-text-muted)', width: '100%'
         }}>
-          {result.tokenNumber}
+          Please show this token at the reception when you arrive at <strong>{clinicName}</strong>.
         </div>
-        <div>
-          <p style={{ fontSize: '1.25rem', fontWeight: 800 }}>Appointment Confirmed</p>
-          <p style={{ color: 'var(--color-text-muted)', marginTop: '0.25rem' }}>
-            {formatDate(result.bookedFor)}
-          </p>
-        </div>
-        <div style={{
-          background: 'var(--color-primary-soft)', borderRadius: 'var(--radius-lg)',
-          padding: '1rem',
-        }}>
-          <p style={{ fontWeight: 700, color: 'var(--color-primary)' }}>Your token number is #{result.tokenNumber}</p>
-          <p style={{ color: 'var(--color-text-muted)', fontSize: '0.875rem', marginTop: '0.25rem' }}>
-            Please arrive on time and show this number at reception.
-          </p>
-        </div>
-        <p style={{ color: 'var(--color-text-muted)', fontSize: '0.82rem' }}>
-          You will receive a WhatsApp confirmation shortly.
-        </p>
+
         <button
-          type="button"
-          onClick={() => { setResult(null); setName(''); setPhone(''); setComplaint(''); }}
+          onClick={resetForm}
           style={{
-            background: 'white', border: '1px solid var(--color-border)',
-            borderRadius: 'var(--radius-md)', padding: '0.75rem 1rem',
-            fontWeight: 600, cursor: 'pointer',
+            width: '100%', padding: '1rem', background: 'white', border: '1px solid var(--color-primary)',
+            color: 'var(--color-primary)', borderRadius: 'var(--radius-md)', fontWeight: '700',
+            cursor: 'pointer', fontSize: '1rem', marginTop: '0.5rem'
           }}
         >
           Book another appointment
@@ -123,82 +126,105 @@ export default function BookingForm({ doctorId, slug, clinicName }: Props) {
   }
 
   return (
-    <form
-      onSubmit={handleSubmit}
-      style={{
-        background: 'white', borderRadius: 'var(--radius-xl)',
-        border: '1px solid var(--color-border)', padding: '1.5rem',
-        display: 'flex', flexDirection: 'column', gap: '1.25rem',
-      }}
-    >
-      <div>
-        <h2 style={{ fontSize: '1.1rem', fontWeight: 800, marginBottom: '0.25rem' }}>Your Details</h2>
-        <p style={{ color: 'var(--color-text-muted)', fontSize: '0.875rem' }}>
-          Fill in the form below. Reception will confirm your slot.
-        </p>
-      </div>
-
-      <div style={{ display: 'grid', gap: '1rem' }}>
-        <div>
-          <label htmlFor="name">Full Name *</label>
-          <input id="name" type="text" value={name} onChange={e => setName(e.target.value)}
-            required placeholder="e.g. Ravi Kumar" />
-        </div>
-
-        <div>
-          <label htmlFor="phone">Mobile Number *</label>
-          <input id="phone" type="tel" value={phone} onChange={e => setPhone(e.target.value)}
-            required placeholder="10-digit number" pattern="[0-9]{10}" inputMode="numeric" />
-        </div>
-
-        <div>
-          <label htmlFor="bookedFor">Preferred Date *</label>
-          <input id="bookedFor" type="date" value={bookedFor}
-            min={getMinDate()} max={getMaxDate()}
-            onChange={e => setBookedFor(e.target.value)} required />
-        </div>
-
-        <div>
-          <label htmlFor="visitType">Visit Type *</label>
-          <select id="visitType" value={visitType} onChange={e => setVisitType(e.target.value as VisitType)}>
-            <option value="booked">Scheduled Appointment</option>
-            <option value="follow-up">Follow-up Visit</option>
-            <option value="walk-in">Walk-in</option>
-          </select>
-        </div>
-
-        <div>
-          <label htmlFor="complaint">Reason for Visit *</label>
-          <textarea id="complaint" rows={3} value={complaint}
-            onChange={e => setComplaint(e.target.value)}
-            required placeholder="Briefly describe your symptoms or reason"
-            style={{ resize: 'vertical' }} />
-        </div>
-      </div>
-
-      {error && (
-        <div style={{
-          background: 'var(--color-error-bg)', border: '1px solid #fca5a5',
-          borderRadius: 'var(--radius-lg)', padding: '0.875rem 1rem',
-          color: 'var(--color-error)', fontWeight: 600,
-        }}>{error}</div>
-      )}
-
-      <button
-        type="submit"
-        disabled={submitting}
+    <div style={{ maxWidth: '480px', margin: '0 auto' }}>
+      <form
+        onSubmit={handleSubmit}
         style={{
-          background: 'var(--color-primary)', color: 'white', border: 'none',
-          borderRadius: 'var(--radius-md)', padding: '1rem',
-          fontWeight: 800, fontSize: '1rem', cursor: submitting ? 'not-allowed' : 'pointer',
+          background: 'white', borderRadius: 'var(--radius-xl)',
+          border: '1px solid var(--color-border)', padding: '2rem 1.5rem',
+          display: 'flex', flexDirection: 'column', gap: '1.5rem',
+          boxShadow: 'var(--shadow-md)'
         }}
       >
-        {submitting ? 'Confirming...' : 'Confirm Appointment'}
-      </button>
+        <div style={{ textAlign: 'center', marginBottom: '0.5rem' }}>
+          <h2 style={{ fontSize: '1.5rem', fontWeight: '800', color: 'var(--color-text)' }}>Book an appointment</h2>
+          <p style={{ color: 'var(--color-text-muted)', fontSize: '0.875rem', marginTop: '0.25rem' }}>
+            Quickly book your slot at {clinicName}
+          </p>
+        </div>
 
-      <p style={{ textAlign: 'center', fontSize: '0.78rem', color: 'var(--color-text-muted)' }}>
-        By booking you agree to receive a WhatsApp confirmation from {clinicName}.
-      </p>
-    </form>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+            <label style={{ fontSize: '0.875rem', fontWeight: '700', color: 'var(--color-text)' }}>Your name</label>
+            <input 
+              type="text" 
+              value={name} 
+              onChange={e => setName(e.target.value)}
+              required 
+              placeholder="Full name"
+              style={{ padding: '0.75rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)' }}
+            />
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+            <label style={{ fontSize: '0.875rem', fontWeight: '700', color: 'var(--color-text)' }}>Phone (10 digits)</label>
+            <input 
+              type="tel" 
+              value={phone} 
+              onChange={e => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
+              required 
+              placeholder="Mobile number" 
+              inputMode="numeric"
+              style={{ padding: '0.75rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)' }}
+            />
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+            <label style={{ fontSize: '0.875rem', fontWeight: '700', color: 'var(--color-text)' }}>Preferred date</label>
+            <input 
+              type="date" 
+              value={bookedFor}
+              min={getTodayIsoDate()}
+              onChange={e => setBookedFor(e.target.value)} 
+              required 
+              style={{ padding: '0.75rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)' }}
+            />
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+            <label style={{ fontSize: '0.875rem', fontWeight: '700', color: 'var(--color-text)' }}>Visit type</label>
+            <select 
+              value={visitType} 
+              onChange={e => setVisitType(e.target.value as VisitType)}
+              style={{ padding: '0.75rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', background: 'white' }}
+            >
+              <option value="booked">Booked</option>
+              <option value="follow-up">Follow-up</option>
+              <option value="walk-in">Walk-in</option>
+            </select>
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+            <label style={{ fontSize: '0.875rem', fontWeight: '700', color: 'var(--color-text)' }}>Chief complaint</label>
+            <textarea 
+              rows={3} 
+              value={complaint}
+              onChange={e => setComplaint(e.target.value)}
+              required 
+              placeholder="Briefly describe why you are visiting"
+              style={{ padding: '0.75rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', resize: 'none' }}
+            />
+          </div>
+        </div>
+
+        {error && (
+          <div style={{ padding: '0.75rem', background: 'var(--color-error-bg)', color: 'var(--color-error)', borderRadius: 'var(--radius-md)', fontSize: '0.875rem', textAlign: 'center', fontWeight: '600' }}>
+            {error}
+          </div>
+        )}
+
+        <button
+          type="submit"
+          disabled={submitting}
+          style={{
+            width: '100%', padding: '1rem', background: 'var(--color-primary)',
+            color: 'white', border: 'none', borderRadius: 'var(--radius-md)', fontWeight: '800',
+            cursor: submitting ? 'not-allowed' : 'pointer', fontSize: '1rem', marginTop: '0.5rem'
+          }}
+        >
+          {submitting ? 'Booking...' : 'Book Appointment'}
+        </button>
+      </form>
+    </div>
   );
 }

@@ -59,8 +59,7 @@
 
 body {
   font-family: var(--font-family-base);
-  background:
-    linear-gradient(180deg, #f9fbff 0%, #f4f7fd 22%, #f4f7fd 100%);
+  background: #ffffff;
   color: var(--color-text);
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;

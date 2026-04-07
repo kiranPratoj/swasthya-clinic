@@ -1,8 +1,6 @@
 import { PatientIntakeDraft, VisitType, VoiceDraft } from './types';
 import { requestSarvamToolObject } from './sarvamChatAdapter';
 
-const VALID_VISIT_TYPES: VisitType[] = ['walk-in', 'booked', 'follow-up', 'emergency'];
-
 function normalizeNullableText(value: unknown): string | null {
   if (typeof value !== 'string') return null;
   const trimmed = value.trim();

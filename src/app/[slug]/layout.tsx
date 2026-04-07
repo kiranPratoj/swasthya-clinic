@@ -84,7 +84,9 @@ export default async function SlugLayout({
         </div>
       </div>
 
-      {children}
+      <div className="max-w-7xl px-4 py-8">
+        {children}
+      </div>
     </div>
   );
 }

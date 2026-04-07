@@ -27,8 +27,9 @@ export async function synthesizeKannadaSpeech(text: string): Promise<{ audioBase
     if (!audio) return { audioBase64: null, error: 'No audio generated.' };
 
     return { audioBase64: audio };
-  } catch (err: any) {
-    console.error('Sarvam TTS error:', err?.message);
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error('Sarvam TTS error:', message);
     return { audioBase64: null, error: 'Speech synthesis failed.' };
   }
 }
