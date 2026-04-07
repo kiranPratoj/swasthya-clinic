@@ -3,11 +3,11 @@
 -- RLS enforced at DB level
 
 -- ─── Extensions ──────────────────────────────────────────────────────────────
-create extension if not exists "uuid-ossp";
+-- uuid-ossp not needed; using gen_random_uuid() (built-in pgcrypto)
 
 -- ─── Clinics (tenant root) ────────────────────────────────────────────────────
 create table clinics (
-  id             uuid primary key default uuid_generate_v4(),
+  id             uuid primary key default gen_random_uuid(),
   name           text not null,
   slug           text not null unique,
   custom_domain  text unique,
@@ -18,7 +18,7 @@ create table clinics (
 
 -- ─── Doctors ─────────────────────────────────────────────────────────────────
 create table doctors (
-  id                  uuid primary key default uuid_generate_v4(),
+  id                  uuid primary key default gen_random_uuid(),
   clinic_id           uuid not null references clinics(id) on delete cascade,
   name                text not null,
   speciality          text not null,
@@ -31,7 +31,7 @@ create index idx_doctors_clinic on doctors(clinic_id);
 
 -- ─── Staff ───────────────────────────────────────────────────────────────────
 create table staff (
-  id         uuid primary key default uuid_generate_v4(),
+  id         uuid primary key default gen_random_uuid(),
   clinic_id  uuid not null references clinics(id) on delete cascade,
   name       text not null,
   role       text not null default 'receptionist',
@@ -42,7 +42,7 @@ create index idx_staff_clinic on staff(clinic_id);
 
 -- ─── Patients ────────────────────────────────────────────────────────────────
 create table patients (
-  id         uuid primary key default uuid_generate_v4(),
+  id         uuid primary key default gen_random_uuid(),
   clinic_id  uuid not null references clinics(id) on delete cascade,
   name       text not null,
   age        int,
@@ -54,7 +54,7 @@ create index idx_patients_clinic_phone on patients(clinic_id, phone);
 
 -- ─── Appointments ─────────────────────────────────────────────────────────────
 create table appointments (
-  id            uuid primary key default uuid_generate_v4(),
+  id            uuid primary key default gen_random_uuid(),
   clinic_id     uuid not null references clinics(id) on delete cascade,
   patient_id    uuid not null references patients(id),
   doctor_id     uuid not null references doctors(id),
@@ -75,7 +75,7 @@ create index idx_appt_patient       on appointments(patient_id);
 
 -- ─── Visit History ────────────────────────────────────────────────────────────
 create table visit_history (
-  id             uuid primary key default uuid_generate_v4(),
+  id             uuid primary key default gen_random_uuid(),
   clinic_id      uuid not null references clinics(id) on delete cascade,
   patient_id     uuid not null references patients(id),
   appointment_id uuid references appointments(id),
@@ -86,7 +86,7 @@ create index idx_visit_clinic_patient on visit_history(clinic_id, patient_id);
 
 -- ─── Audit Log ────────────────────────────────────────────────────────────────
 create table audit_log (
-  id         uuid primary key default uuid_generate_v4(),
+  id         uuid primary key default gen_random_uuid(),
   clinic_id  uuid not null references clinics(id) on delete cascade,
   actor      text not null,
   action     text not null,
