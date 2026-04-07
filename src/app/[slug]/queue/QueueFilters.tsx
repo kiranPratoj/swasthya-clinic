@@ -8,13 +8,13 @@ type QueueFiltersProps = {
   onFiltered: (filtered: QueueItem[]) => void;
 };
 
-type FilterKey = 'all' | 'waiting' | 'consulting' | 'done';
+type FilterKey = 'all' | 'confirmed' | 'in_progress' | 'completed';
 
 const FILTER_LABELS: Record<FilterKey, string> = {
   all: 'All',
-  waiting: 'Waiting',
-  consulting: 'Consulting',
-  done: 'Done',
+  confirmed: 'Waiting',
+  in_progress: 'Consulting',
+  completed: 'Done',
 };
 
 function matchesStatus(item: QueueItem, status: FilterKey): boolean {
@@ -40,9 +40,9 @@ export default function QueueFilters({ queue, onFiltered }: QueueFiltersProps) {
   const counts = useMemo(
     () => ({
       all: getCount(queue, 'all'),
-      waiting: getCount(queue, 'waiting'),
-      consulting: getCount(queue, 'consulting'),
-      done: getCount(queue, 'done'),
+      confirmed: getCount(queue, 'confirmed'),
+      in_progress: getCount(queue, 'in_progress'),
+      completed: getCount(queue, 'completed'),
     }),
     [queue]
   );
@@ -82,7 +82,7 @@ export default function QueueFilters({ queue, onFiltered }: QueueFiltersProps) {
       />
 
       <div style={{ display: 'flex', gap: '0.65rem', flexWrap: 'wrap' }}>
-        {(['all', 'waiting', 'consulting', 'done'] as FilterKey[]).map((filterKey) => {
+        {(['all', 'confirmed', 'in_progress', 'completed'] as FilterKey[]).map((filterKey) => {
           const isActive = activeFilter === filterKey;
           return (
             <button

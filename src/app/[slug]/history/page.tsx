@@ -105,8 +105,8 @@ export default async function PatientHistoryPage({
                     </div>
                     <span style={{ 
                       padding: '0.3rem 0.75rem', borderRadius: '6px', fontSize: '0.75rem', fontWeight: 800, textTransform: 'uppercase',
-                      background: appt.status === 'done' ? 'var(--color-success-bg)' : appt.status === 'waiting' ? 'var(--color-warning-bg)' : 'var(--color-bg)',
-                      color: appt.status === 'done' ? 'var(--color-success)' : appt.status === 'waiting' ? 'var(--color-warning)' : 'var(--color-text-muted)'
+                      background: appt.status === 'completed' ? 'var(--color-success-bg)' : appt.status === 'confirmed' ? 'var(--color-warning-bg)' : 'var(--color-bg)',
+                      color: appt.status === 'completed' ? 'var(--color-success)' : appt.status === 'confirmed' ? 'var(--color-warning)' : 'var(--color-text-muted)'
                     }}>
                       {appt.status}
                     </span>

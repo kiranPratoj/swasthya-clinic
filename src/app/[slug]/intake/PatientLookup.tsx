@@ -38,21 +38,21 @@ function formatVisitType(value: Appointment['visit_type']): string {
 }
 
 function getStatusColors(status: AppointmentStatus): { background: string; color: string } {
-  if (status === 'consulting') {
+  if (status === 'in_progress') {
     return {
       background: '#fef3c7',
       color: '#b45309',
     };
   }
 
-  if (status === 'done') {
+  if (status === 'completed') {
     return {
       background: '#dcfce7',
       color: '#166534',
     };
   }
 
-  if (status === 'cancelled' || status === 'no-show') {
+  if (status === 'cancelled' || status === 'no_show') {
     return {
       background: '#fee2e2',
       color: '#b91c1c',

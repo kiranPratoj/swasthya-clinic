@@ -54,7 +54,14 @@ export type Patient = {
   created_at: string;
 };
 
-export type AppointmentStatus = 'waiting' | 'consulting' | 'done' | 'cancelled' | 'no-show';
+export type AppointmentStatus =
+  | 'booked'        // created, not yet at clinic
+  | 'confirmed'     // patient arrived, in queue
+  | 'in_progress'   // doctor is seeing them
+  | 'completed'     // visit done
+  | 'cancelled'     // explicitly cancelled
+  | 'no_show'       // did not arrive
+  | 'rescheduled';  // moved to different slot
 export type VisitType = 'walk-in' | 'booked' | 'follow-up' | 'emergency';
 
 export type Appointment = {
@@ -89,6 +96,44 @@ export type AuditLog = {
   target_id: string | null;
   meta: Record<string, unknown> | null;
   created_at: string;
+};
+
+// ─── Communication ───────────────────────────────────────────────────────────
+
+export type CommunicationEvent = {
+  id: string;
+  clinic_id: string;
+  patient_id: string | null;
+  appointment_id: string | null;
+  channel: 'whatsapp';
+  direction: 'outbound' | 'inbound';
+  template_name: string;
+  to_phone: string;
+  status: 'queued' | 'sent' | 'failed';
+  provider_message_id: string | null;
+  payload: Record<string, unknown> | null;
+  error_message: string | null;
+  created_at: string;
+};
+
+// ─── Auth ─────────────────────────────────────────────────────────────────────
+
+export type UserRole = 'admin' | 'receptionist' | 'doctor';
+
+export type ClinicUser = {
+  id: string;
+  auth_user_id: string;
+  clinic_id: string;
+  role: UserRole;
+  created_at: string;
+};
+
+export type SessionPayload = {
+  userId: string;
+  clinicId: string;
+  role: UserRole;
+  slug: string;
+  exp: number;
 };
 
 // ─── Voice / AI intake types ──────────────────────────────────────────────────

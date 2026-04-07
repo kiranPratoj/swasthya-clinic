@@ -7,6 +7,7 @@ import { getDb, auditLog } from '@/lib/db';
 import type {
   Appointment,
   AppointmentStatus,
+  CommunicationEvent,
   Doctor,
   OnboardingInput,
   Patient,
@@ -126,7 +127,7 @@ export async function createAppointment(formData: FormData): Promise<{ appointme
       token_number: tokenNumber,
       visit_type: visitType,
       complaint,
-      status: 'waiting',
+      status: 'confirmed',  // receptionist intake = patient is present
       booked_for: bookedFor,
     })
     .select('id')
@@ -166,8 +167,8 @@ export async function updateAppointmentStatus(
 
   if (error) throw new Error(error.message);
 
-  // Auto-populate visit_history when appointment is marked done
-  if (status === 'done' && appt) {
+  // Auto-populate visit_history when appointment is completed
+  if (status === 'completed' && appt) {
     await db.from('visit_history').insert({
       clinic_id: clinicId,
       patient_id: appt.patient_id,
@@ -195,7 +196,7 @@ export async function getClinicQueue(date?: string): Promise<QueueItem[]> {
     .select('*, patient:patients(*)')
     .eq('clinic_id', clinicId)
     .eq('booked_for', targetDate)
-    .in('status', ['waiting', 'consulting'])
+    .in('status', ['booked', 'confirmed', 'in_progress'])
     .order('token_number', { ascending: true });
 
   if (error) throw new Error(error.message);
@@ -283,9 +284,9 @@ export async function getAdminStats(date?: string) {
 
   const all = appts ?? [];
   const total = all.length;
-  const waiting = all.filter(a => a.status === 'waiting').length;
-  const consulting = all.filter(a => a.status === 'consulting').length;
-  const done = all.filter(a => a.status === 'done').length;
+  const waiting = all.filter(a => a.status === 'booked' || a.status === 'confirmed').length;
+  const consulting = all.filter(a => a.status === 'in_progress').length;
+  const done = all.filter(a => a.status === 'completed').length;
 
   // Patients by hour (9–18)
   const byHour: Record<number, number> = {};
@@ -336,6 +337,20 @@ export async function getDoctorForClinic(): Promise<Doctor | null> {
     .eq('clinic_id', clinicId)
     .single();
   return data as Doctor | null;
+}
+
+// ─── Communication events ─────────────────────────────────────────────────────
+
+export async function logCommunicationEvent(
+  data: Omit<CommunicationEvent, 'id' | 'created_at'>
+): Promise<void> {
+  const clinicId = data.clinic_id;
+  await getDb().from('communication_events').insert(data);
+  await auditLog(clinicId, 'system', 'communication_sent', data.appointment_id ?? undefined, {
+    channel: data.channel,
+    template: data.template_name,
+    status: data.status,
+  });
 }
 
 // ─── Voice API helper (called from API route, not server action) ──────────────

@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import { getClinicQueue, updateAppointmentStatus } from '@/app/actions';
 import type { AppointmentStatus, QueueItem } from '@/lib/types';
+import AppointmentActions from './AppointmentActions';
 import NewPatientToast from './NewPatientToast';
 import QueueFilters from './QueueFilters';
 
@@ -29,15 +30,15 @@ function formatVisitType(value: QueueItem['visit_type']): string {
 }
 
 function isAppointmentStatus(value: unknown): value is AppointmentStatus {
-  return value === 'waiting' || value === 'consulting' || value === 'done' || value === 'cancelled' || value === 'no-show';
+  return value === 'booked' || value === 'confirmed' || value === 'in_progress' || value === 'completed' || value === 'cancelled' || value === 'no_show' || value === 'rescheduled';
 }
 
 function getTokenCircleColor(status: AppointmentStatus): string {
-  if (status === 'consulting') {
+  if (status === 'in_progress') {
     return '#f59e0b';
   }
 
-  if (status === 'done') {
+  if (status === 'completed') {
     return '#16a34a';
   }
 
@@ -50,16 +51,16 @@ function getActionConfig(status: AppointmentStatus): {
   background: string;
   disabled: boolean;
 } {
-  if (status === 'consulting') {
+  if (status === 'in_progress') {
     return {
       label: 'Mark Done',
-      nextStatus: 'done',
+      nextStatus: 'completed',
       background: '#16a34a',
       disabled: false,
     };
   }
 
-  if (status === 'done') {
+  if (status === 'completed') {
     return {
       label: 'Done ✓',
       nextStatus: null,
@@ -68,7 +69,7 @@ function getActionConfig(status: AppointmentStatus): {
     };
   }
 
-  if (status !== 'waiting') {
+  if (status !== 'confirmed' && status !== 'booked') {
     return {
       label: 'Status Locked',
       nextStatus: null,
@@ -79,7 +80,7 @@ function getActionConfig(status: AppointmentStatus): {
 
   return {
     label: 'Start Consulting',
-    nextStatus: 'consulting',
+    nextStatus: 'in_progress',
     background: '#0891b2',
     disabled: false,
   };
@@ -331,7 +332,7 @@ export default function QueueDisplay({
                 <div
                   style={{
                     display: 'grid',
-                    gridTemplateColumns: 'auto 1fr auto',
+                    gridTemplateColumns: 'auto 1fr',
                     gap: '1rem',
                     alignItems: 'center',
                   }}
@@ -389,15 +390,15 @@ export default function QueueDisplay({
                           padding: '0.35rem 0.65rem',
                           borderRadius: '999px',
                           background:
-                            item.status === 'consulting'
+                            item.status === 'in_progress'
                               ? '#fef3c7'
-                              : item.status === 'done'
+                              : item.status === 'completed'
                                 ? '#dcfce7'
                                 : '#e0f2fe',
                           color:
-                            item.status === 'consulting'
+                            item.status === 'in_progress'
                               ? '#b45309'
-                              : item.status === 'done'
+                              : item.status === 'completed'
                                 ? '#166534'
                                 : '#0369a1',
                           fontSize: '0.78rem',
@@ -410,24 +411,34 @@ export default function QueueDisplay({
                     </div>
                   </div>
 
-                  <button
-                    type="button"
-                    disabled={action.disabled || isPending}
-                    onClick={() => void handleStatusChange(item)}
+                  <div
                     style={{
-                      border: 'none',
-                      borderRadius: 'var(--radius-md)',
-                      padding: '0.9rem 1.15rem',
-                      minWidth: '10.5rem',
-                      background: action.background,
-                      color: 'white',
-                      fontWeight: 800,
-                      opacity: action.disabled ? 0.8 : 1,
-                      boxShadow: 'var(--shadow-sm)',
+                      display: 'grid',
+                      gap: '0.75rem',
+                      justifyItems: 'end',
                     }}
                   >
-                    {isPending ? 'Updating...' : action.label}
-                  </button>
+                    <button
+                      type="button"
+                      disabled={action.disabled || isPending}
+                      onClick={() => void handleStatusChange(item)}
+                      style={{
+                        border: 'none',
+                        borderRadius: 'var(--radius-md)',
+                        padding: '0.9rem 1.15rem',
+                        minWidth: '10.5rem',
+                        background: action.background,
+                        color: 'white',
+                        fontWeight: 800,
+                        opacity: action.disabled ? 0.8 : 1,
+                        boxShadow: 'var(--shadow-sm)',
+                      }}
+                    >
+                      {isPending ? 'Updating...' : action.label}
+                    </button>
+
+                    <AppointmentActions appointmentId={item.id} />
+                  </div>
                 </div>
               </article>
             );
