@@ -1,38 +1,68 @@
-import { getAdminStats, getClinicQueue, getDoctorForClinic } from '@/app/actions';
+import { headers } from 'next/headers';
 import Link from 'next/link';
+import { getDb } from '@/lib/db';
+import { getDoctorForClinic } from '@/app/actions';
 import DateNavigator from './DateNavigator';
+import type { Patient } from '@/lib/types';
 
-function getPatientDisplayName(patient: unknown): string {
-  if (Array.isArray(patient)) {
-    const firstPatient = patient[0];
-    if (
-      firstPatient &&
-      typeof firstPatient === 'object' &&
-      'name' in firstPatient &&
-      typeof firstPatient.name === 'string'
-    ) {
-      return firstPatient.name;
-    }
-  }
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
-  if (patient && typeof patient === 'object' && 'name' in patient && typeof patient.name === 'string') {
-    return patient.name;
-  }
-
-  return 'Patient';
+function relativeTime(isoString: string): string {
+  const mins = Math.floor((Date.now() - new Date(isoString).getTime()) / 60000);
+  if (mins < 1) return 'Just now';
+  return `${mins} min ago`;
 }
 
-function getTodayIsoDate(): string {
-  return new Date().toISOString().split('T')[0];
+function getDayLabel(dateStr: string): string {
+  const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const d = new Date(dateStr + 'T12:00:00'); // noon to avoid TZ drift
+  return days[d.getDay()];
+}
+
+function getLast7Days(): string[] {
+  const days: string[] = [];
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date();
+    d.setDate(d.getDate() - i);
+    days.push(d.toISOString().split('T')[0]);
+  }
+  return days;
 }
 
 function normalizeDateParam(value: string | string[] | undefined): string {
   if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
-    return getTodayIsoDate();
+    return new Date().toISOString().split('T')[0];
   }
-
   return value;
 }
+
+function getPatientName(patient: unknown): string {
+  if (Array.isArray(patient)) {
+    const first = patient[0];
+    if (first && typeof first === 'object' && 'name' in first && typeof (first as Patient).name === 'string') {
+      return (first as Patient).name;
+    }
+  }
+  if (patient && typeof patient === 'object' && 'name' in patient && typeof (patient as Patient).name === 'string') {
+    return (patient as Patient).name;
+  }
+  return 'Patient';
+}
+
+function statusLabel(status: string): string {
+  const map: Record<string, string> = {
+    booked: 'waiting',
+    confirmed: 'waiting',
+    in_progress: 'consulting',
+    completed: 'done',
+    cancelled: 'cancelled',
+    no_show: 'no-show',
+    rescheduled: 'rescheduled',
+  };
+  return map[status] ?? status;
+}
+
+// ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default async function AdminDashboard({
   params,
@@ -44,20 +74,90 @@ export default async function AdminDashboard({
   const { slug } = await params;
   const resolvedSearchParams = await searchParams;
   const date = normalizeDateParam(resolvedSearchParams.date);
-  const [stats, activeQueue, doctor] = await Promise.all([
-    getAdminStats(date),
-    getClinicQueue(date),
+
+  const clinicId = (await headers()).get('x-clinic-id');
+  if (!clinicId) {
+    return <div style={{ padding: '2rem', color: 'var(--color-error)' }}>Clinic not found.</div>;
+  }
+
+  const db = getDb();
+  const today = new Date().toISOString().split('T')[0];
+  const last7Days = getLast7Days();
+  const thirtyMinAgo = new Date(Date.now() - 30 * 60 * 1000).toISOString();
+
+  // ── Parallel DB queries ───────────────────────────────────────────────────
+  const [
+    todayApptsResult,
+    weeklyResult,
+    flaggedResult,
+    activityResult,
+    doctor,
+  ] = await Promise.all([
+    // 1. Today's appointments for stat cards
+    db
+      .from('appointments')
+      .select('status')
+      .eq('clinic_id', clinicId)
+      .eq('booked_for', date),
+
+    // 2. Weekly counts — last 7 days
+    db
+      .from('appointments')
+      .select('booked_for')
+      .eq('clinic_id', clinicId)
+      .in('booked_for', last7Days),
+
+    // 3. Flagged queue: waiting > 30 min (only meaningful when viewing today)
+    db
+      .from('appointments')
+      .select('id, created_at, patient:patients(name)')
+      .eq('clinic_id', clinicId)
+      .eq('booked_for', today)
+      .in('status', ['booked', 'confirmed'])
+      .lt('created_at', thirtyMinAgo),
+
+    // 4. Recent activity feed — last 10 by created_at desc
+    db
+      .from('appointments')
+      .select('id, status, created_at, patient:patients(name)')
+      .eq('clinic_id', clinicId)
+      .order('created_at', { ascending: false })
+      .limit(10),
+
+    // 5. Doctor name for greeting
     getDoctorForClinic(),
   ]);
 
+  // ── Stat card counts ──────────────────────────────────────────────────────
+  const todayAppts = todayApptsResult.data ?? [];
+  const patientsSeen = todayAppts.filter((a) => a.status === 'completed').length;
+  const waiting = todayAppts.filter((a) => a.status === 'booked' || a.status === 'confirmed').length;
+  const consulting = todayAppts.filter((a) => a.status === 'in_progress').length;
+  const noShows = todayAppts.filter((a) => a.status === 'no_show').length;
+
+  // ── Weekly bar chart data ─────────────────────────────────────────────────
+  const weeklyAppts = weeklyResult.data ?? [];
+  const countByDay: Record<string, number> = {};
+  for (const day of last7Days) countByDay[day] = 0;
+  for (const a of weeklyAppts) {
+    if (a.booked_for in countByDay) countByDay[a.booked_for]++;
+  }
+  const maxCount = Math.max(...Object.values(countByDay), 1);
+
+  // ── Flagged queue ─────────────────────────────────────────────────────────
+  const flaggedAppts = flaggedResult.data ?? [];
+
+  // ── Activity feed ─────────────────────────────────────────────────────────
+  const activityItems = activityResult.data ?? [];
+
+  // ── Greeting ──────────────────────────────────────────────────────────────
   const now = new Date();
   const hour = now.getHours();
   const greeting = hour < 12 ? 'morning' : hour < 17 ? 'afternoon' : 'evening';
 
-  const maxCount = Math.max(...Object.values(stats.byHour), 1);
-
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+      {/* Header */}
       <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', flexWrap: 'wrap', gap: '1rem' }}>
         <div>
           <h1 style={{ fontSize: '1.75rem', fontWeight: '700', color: 'var(--color-text)' }}>
@@ -65,7 +165,7 @@ export default async function AdminDashboard({
           </h1>
           <p style={{ color: 'var(--color-text-muted)' }}>Here is what&apos;s happening in your clinic today.</p>
         </div>
-        <div style={{ display: 'flex', gap: '0.75rem' }}>
+        <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
           <Link href={`/${slug}/intake`} className="bda-nav-link" style={{ background: 'white' }}>Reception Intake</Link>
           <Link href={`/${slug}/queue`} className="bda-nav-link" style={{ background: 'var(--color-primary)', color: 'white' }}>Doctor Queue</Link>
           <Link href={`/${slug}/settings`} className="bda-nav-link" style={{ background: 'white' }}>Settings</Link>
@@ -74,114 +174,152 @@ export default async function AdminDashboard({
 
       <DateNavigator currentDate={date} />
 
-      {/* Stats Row */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '1.25rem' }}>
+      {/* 1. Stat Cards — 2×2 on mobile, 4×1 on desktop */}
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(2, 1fr)',
+        gap: '1.25rem',
+      }}>
+        <style>{`
+          @media (min-width: 640px) {
+            .admin-stat-grid { grid-template-columns: repeat(4, 1fr) !important; }
+          }
+        `}</style>
         {[
-          { label: 'Total Today', value: stats.total, color: 'var(--color-primary)' },
-          { label: 'Waiting', value: stats.waiting, color: 'var(--color-gold)' },
-          { label: 'Consulting', value: stats.consulting, color: 'var(--color-accent)' },
-          { label: 'Done', value: stats.done, color: 'var(--color-text-muted)' },
+          { label: 'Patients Seen', value: patientsSeen, color: 'var(--color-accent)' },
+          { label: 'Waiting', value: waiting, color: 'var(--color-gold)' },
+          { label: 'In Consultation', value: consulting, color: 'var(--color-primary)' },
+          { label: 'No-shows', value: noShows, color: 'var(--color-error)' },
         ].map((s, i) => (
-          <div key={i} style={{ 
-            background: 'white', padding: '1.5rem', borderRadius: 'var(--radius-lg)', 
-            border: '1px solid var(--color-border)', borderLeft: `4px solid ${s.color}`,
-            boxShadow: 'var(--shadow-sm)' 
+          <div key={i} style={{
+            background: 'white',
+            padding: '1.5rem',
+            borderRadius: 'var(--radius-lg)',
+            border: '1px solid var(--color-border)',
+            borderLeft: `4px solid ${s.color}`,
+            boxShadow: 'var(--shadow-sm)',
           }}>
-            <p style={{ fontSize: '0.75rem', fontWeight: '700', color: 'var(--color-text-muted)', textTransform: 'uppercase', marginBottom: '0.5rem' }}>{s.label}</p>
+            <p style={{ fontSize: '0.75rem', fontWeight: '700', color: 'var(--color-text-muted)', textTransform: 'uppercase', marginBottom: '0.5rem', letterSpacing: '0.04em' }}>{s.label}</p>
             <p style={{ fontSize: '2rem', fontWeight: '800', color: 'var(--color-text)' }}>{s.value}</p>
           </div>
         ))}
       </div>
 
-      <div className="resp-staff-review" style={{ gap: '2rem', alignItems: 'start' }}>
-        {/* Recent Appointments */}
-        <div style={{ background: 'white', borderRadius: 'var(--radius-lg)', border: '1px solid var(--color-border)', overflow: 'hidden' }}>
-          <div style={{ padding: '1.25rem', borderBottom: '1px solid var(--color-border)' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', alignItems: 'center', flexWrap: 'wrap' }}>
-              <h2 style={{ fontSize: '1.125rem', fontWeight: '700' }}>Recent Appointments</h2>
-              <span style={{ color: 'var(--color-text-muted)', fontSize: '0.9rem', fontWeight: 700 }}>
-                {activeQueue.length} active in queue
-              </span>
-            </div>
-          </div>
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.875rem' }}>
-              <thead>
-                <tr style={{ textAlign: 'left', background: 'var(--color-bg)', borderBottom: '1px solid var(--color-border)' }}>
-                  <th style={{ padding: '1rem' }}>Token</th>
-                  <th style={{ padding: '1rem' }}>Patient</th>
-                  <th style={{ padding: '1rem' }}>Complaint</th>
-                  <th style={{ padding: '1rem' }}>Visit Type</th>
-                  <th style={{ padding: '1rem' }}>Status</th>
-                  <th style={{ padding: '1rem' }}>Time</th>
-                </tr>
-              </thead>
-              <tbody>
-                {stats.recent.map((a, i) => (
-                  <tr key={i} style={{ borderBottom: i === stats.recent.length - 1 ? 'none' : '1px solid var(--color-bg)' }}>
-                    <td style={{ padding: '1rem', fontWeight: '700', color: 'var(--color-primary)' }}>#{a.token_number}</td>
-                    <td style={{ padding: '1rem', fontWeight: '600' }}>{getPatientDisplayName(a.patient)}</td>
-                    <td style={{ padding: '1rem', color: 'var(--color-text-muted)' }}>{a.complaint}</td>
-                    <td style={{ padding: '1rem', textTransform: 'capitalize' }}>{a.visit_type}</td>
-                    <td style={{ padding: '1rem' }}>
-                      <span style={{ 
-                        padding: '0.25rem 0.5rem', borderRadius: '4px', fontSize: '0.75rem', fontWeight: '700',
-                        background: (a.status === 'confirmed' || a.status === 'booked') ? 'var(--color-gold-light)' : a.status === 'in_progress' ? 'var(--color-accent-soft)' : a.status === 'completed' ? '#dcfce7' : 'var(--color-primary-soft)',
-                        color: (a.status === 'confirmed' || a.status === 'booked') ? 'var(--color-gold)' : a.status === 'in_progress' ? 'var(--color-accent)' : a.status === 'completed' ? '#166534' : 'var(--color-text-muted)'
-                      }}>
-                        {({'booked': 'Booked', 'confirmed': 'Waiting', 'in_progress': 'Consulting', 'completed': 'Done', 'cancelled': 'Cancelled', 'no_show': 'No Show', 'rescheduled': 'Rescheduled'} as Record<string, string>)[a.status] ?? a.status}
-                      </span>
-                    </td>
-                    <td style={{ padding: '1rem', color: 'var(--color-text-muted)' }}>
-                      {new Date(a.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                    </td>
-                  </tr>
-                ))}
-                {stats.recent.length === 0 && (
-                  <tr>
-                    <td colSpan={6} style={{ padding: '3rem', textAlign: 'center', color: 'var(--color-text-muted)' }}>
-                      No appointments yet today.
-                    </td>
-                  </tr>
+      {/* 2. Weekly bar chart */}
+      <div style={{
+        background: 'white',
+        padding: '1.5rem',
+        borderRadius: 'var(--radius-lg)',
+        border: '1px solid var(--color-border)',
+        boxShadow: 'var(--shadow-sm)',
+      }}>
+        <h2 style={{ fontSize: '1.125rem', fontWeight: '700', marginBottom: '1.5rem', color: 'var(--color-text)' }}>This Week</h2>
+        <div style={{ display: 'flex', alignItems: 'flex-end', gap: '0.5rem', height: '100px' }}>
+          {last7Days.map((day) => {
+            const count = countByDay[day] ?? 0;
+            const barHeight = Math.max(4, (count / maxCount) * 80);
+            const isToday = day === today;
+            return (
+              <div key={day} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.35rem', flex: 1 }}>
+                {count > 0 && (
+                  <span style={{ fontSize: '0.65rem', fontWeight: '700', color: 'var(--color-primary)' }}>{count}</span>
                 )}
-              </tbody>
-            </table>
-          </div>
+                <div style={{
+                  height: `${barHeight}px`,
+                  width: '28px',
+                  background: isToday ? 'var(--color-primary-hover)' : 'var(--color-primary)',
+                  borderRadius: '4px 4px 0 0',
+                  opacity: count === 0 ? 0.3 : 1,
+                }} title={`${getDayLabel(day)} — ${count} appointment${count !== 1 ? 's' : ''}`} />
+                <span style={{ fontSize: '0.7rem', fontWeight: '600', color: isToday ? 'var(--color-primary)' : 'var(--color-text-muted)' }}>
+                  {getDayLabel(day)}
+                </span>
+              </div>
+            );
+          })}
         </div>
+      </div>
 
-        {/* Chart */}
-        <div style={{ background: 'white', padding: '1.5rem', borderRadius: 'var(--radius-lg)', border: '1px solid var(--color-border)' }}>
-          <h2 style={{ fontSize: '1.125rem', fontWeight: '700', marginBottom: '1.5rem' }}>Patients by Hour</h2>
-          <div style={{ display: 'flex', alignItems: 'flex-end', gap: '0.3rem', height: '120px', borderBottom: '1px solid var(--color-border)', paddingBottom: '0' }}>
-            {[9, 10, 11, 12, 13, 14, 15, 16, 17, 18].map((h) => {
-              const count = stats.byHour[h] || 0;
-              const height = count > 0 ? Math.max(8, (count / maxCount) * 100) : 4;
-              const label = h <= 12 ? `${h === 12 ? 12 : h}${h < 12 ? 'a' : 'p'}` : `${h - 12}p`;
-              return (
-                <div key={h} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flex: 1, gap: '0.3rem', justifyContent: 'flex-end', height: '100%' }}>
-                  {count > 0 && <span style={{ fontSize: '0.65rem', fontWeight: 700, color: 'var(--color-primary)' }}>{count}</span>}
-                  <div style={{
-                    width: '100%',
-                    background: count > 0 ? 'var(--color-primary)' : 'var(--color-border)',
-                    height: `${height}px`,
-                    borderRadius: '3px 3px 0 0',
-                    opacity: count > 0 ? 1 : 0.4,
-                  }} title={`${h}:00 — ${count} patient${count !== 1 ? 's' : ''}`} />
-                </div>
-              );
-            })}
+      {/* 3. Flagged queue — only if there are flagged patients, and only for today */}
+      {flaggedAppts.length > 0 && (
+        <div style={{
+          background: 'white',
+          borderRadius: 'var(--radius-lg)',
+          border: '2px solid var(--color-error)',
+          boxShadow: 'var(--shadow-sm)',
+          overflow: 'hidden',
+        }}>
+          <div style={{ padding: '1rem 1.25rem', borderBottom: '1px solid #fca5a5', background: '#fef2f2' }}>
+            <h2 style={{ fontSize: '1rem', fontWeight: '700', color: 'var(--color-error)' }}>
+              Flagged — Waiting Over 30 Minutes
+            </h2>
           </div>
-          <div style={{ display: 'flex', gap: '0.3rem', marginTop: '0.4rem' }}>
-            {[9, 10, 11, 12, 13, 14, 15, 16, 17, 18].map((h) => {
-              const label = h === 12 ? '12p' : h < 12 ? `${h}a` : `${h - 12}p`;
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0' }}>
+            {flaggedAppts.map((appt, i) => {
+              const name = getPatientName(appt.patient);
+              const waitMins = Math.floor((Date.now() - new Date(appt.created_at).getTime()) / 60000);
               return (
-                <div key={h} style={{ flex: 1, textAlign: 'center', fontSize: '0.62rem', fontWeight: 600, color: 'var(--color-text-muted)' }}>
-                  {label}
+                <div key={appt.id} style={{
+                  padding: '1rem 1.25rem',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  borderBottom: i < flaggedAppts.length - 1 ? '1px solid #fca5a5' : 'none',
+                  background: 'white',
+                }}>
+                  <span style={{ fontWeight: '700', color: 'var(--color-text)' }}>{name}</span>
+                  <span style={{ fontWeight: '700', color: 'var(--color-error)', fontSize: '0.875rem' }}>
+                    Waiting {waitMins}m
+                  </span>
                 </div>
               );
             })}
           </div>
         </div>
+      )}
+
+      {/* 4. Recent activity feed */}
+      <div style={{
+        background: 'white',
+        borderRadius: 'var(--radius-lg)',
+        border: '1px solid var(--color-border)',
+        boxShadow: 'var(--shadow-sm)',
+        overflow: 'hidden',
+      }}>
+        <div style={{ padding: '1.25rem', borderBottom: '1px solid var(--color-border)' }}>
+          <h2 style={{ fontSize: '1.125rem', fontWeight: '700', color: 'var(--color-text)' }}>Recent Activity</h2>
+        </div>
+        <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+          {activityItems.length === 0 && (
+            <li style={{ padding: '3rem', textAlign: 'center', color: 'var(--color-text-muted)' }}>
+              No activity yet today.
+            </li>
+          )}
+          {activityItems.map((item, i) => {
+            const name = getPatientName(item.patient);
+            const label = statusLabel(item.status);
+            const timeAgo = relativeTime(item.created_at);
+            return (
+              <li key={item.id} style={{
+                padding: '0.875rem 1.25rem',
+                borderBottom: i < activityItems.length - 1 ? '1px solid var(--color-border)' : 'none',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                gap: '1rem',
+                flexWrap: 'wrap',
+              }}>
+                <span style={{ fontSize: '0.9rem', color: 'var(--color-text)' }}>
+                  <strong>{name}</strong>
+                  <span style={{ color: 'var(--color-text-muted)' }}> · {label}</span>
+                </span>
+                <span style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)', whiteSpace: 'nowrap' }}>
+                  {timeAgo}
+                </span>
+              </li>
+            );
+          })}
+        </ul>
       </div>
     </div>
   );
