@@ -738,6 +738,53 @@ export async function saveVisitRecord(
   revalidatePath(`/${appt.clinic_id}/queue`);
 }
 
+export async function raisePatientIssue(
+  patientId: string,
+  clinicId: string,
+  complaint: string
+): Promise<{ tokenNumber: number | null }> {
+  const db = getDb();
+  const today = new Date().toISOString().split('T')[0];
+
+  // Get doctor for this clinic
+  const { data: doctor } = await db
+    .from('doctors')
+    .select('id')
+    .eq('clinic_id', clinicId)
+    .single();
+
+  // Get max token for today
+  const { data: tokens } = await db
+    .from('appointments')
+    .select('token_number')
+    .eq('clinic_id', clinicId)
+    .eq('booked_for', today)
+    .order('token_number', { ascending: false })
+    .limit(1);
+
+  const nextToken = (tokens?.[0]?.token_number ?? 0) + 1;
+
+  const { data, error } = await db
+    .from('appointments')
+    .insert({
+      clinic_id: clinicId,
+      patient_id: patientId,
+      doctor_id: doctor?.id,
+      status: 'confirmed',
+      visit_type: 'walk-in',
+      complaint,
+      booked_for: today,
+      token_number: nextToken,
+    })
+    .select('token_number')
+    .single();
+
+  if (error) throw new Error(error.message);
+
+  revalidatePath(`/`);
+  return { tokenNumber: data?.token_number ?? null };
+}
+
 export async function callNextPatient(): Promise<void> {
   const clinicId = await getClinicId();
   const db = getDb();
