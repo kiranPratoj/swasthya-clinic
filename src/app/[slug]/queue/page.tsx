@@ -1,6 +1,7 @@
 import { headers } from 'next/headers';
-import { getClinicQueue } from '@/app/actions';
+import { getClinicQueue, callNextPatient } from '@/app/actions';
 import QueueDisplay from './QueueDisplay';
+import QueueAutoRefresh from './QueueAutoRefresh';
 
 function getTodayIsoDate(): string {
   const now = new Date();
@@ -38,9 +39,36 @@ export default async function QueuePage() {
 
   const queue = await getClinicQueue(getTodayIsoDate());
 
+  const waitingCount = queue.filter(
+    (item) => item.status === 'confirmed' || item.status === 'booked'
+  ).length;
+
   return (
     <main style={{ padding: '2rem 1rem 4rem' }}>
+      <QueueAutoRefresh />
       <div className="max-w-5xl">
+        {/* Call Next button */}
+        {waitingCount > 0 && (
+          <form action={callNextPatient} style={{ marginBottom: '1.5rem' }}>
+            <button
+              type="submit"
+              style={{
+                border: 'none',
+                borderRadius: 'var(--radius-md)',
+                padding: '0.9rem 1.5rem',
+                background: 'var(--color-accent)',
+                color: 'white',
+                fontWeight: 800,
+                fontSize: '1rem',
+                boxShadow: 'var(--shadow-sm)',
+                cursor: 'pointer',
+              }}
+            >
+              Call Next Patient ({waitingCount} waiting)
+            </button>
+          </form>
+        )}
+
         <QueueDisplay initialQueue={queue} clinicId={clinicId} />
       </div>
     </main>

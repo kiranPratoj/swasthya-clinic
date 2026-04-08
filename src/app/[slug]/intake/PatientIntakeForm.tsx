@@ -58,6 +58,7 @@ const EMPTY_DRAFT: PatientIntakeDraft = {
 type PatientIntakeFormProps = {
   doctorId: string;
   slug: string;
+  mockMode?: boolean;
 };
 
 function getTodayIsoDate(): string {
@@ -94,6 +95,7 @@ function dedupeTranscript(current: string, nextChunk: string): string {
 export default function PatientIntakeForm({
   doctorId,
   slug,
+  mockMode = false,
 }: PatientIntakeFormProps) {
   const router = useRouter();
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -115,6 +117,7 @@ export default function PatientIntakeForm({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [voiceError, setVoiceError] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [confirmedToken, setConfirmedToken] = useState<number | null>(null);
 
   const bookedFor = getTodayIsoDate();
   const missingFields = voiceDraft?.structuredData.missingFields ?? [];
@@ -362,7 +365,7 @@ export default function PatientIntakeForm({
 
     try {
       const result = await createAppointment(formData);
-      router.push(`/${result.slug || slug}/patient/${result.tokenNumber}`);
+      setConfirmedToken(result.tokenNumber);
     } catch (error: unknown) {
       setSubmitError(getErrorMessage(error));
       setIsSubmitting(false);
@@ -380,6 +383,78 @@ export default function PatientIntakeForm({
   }, []);
 
   const activeProcessingStep = PROCESSING_STEPS[processingStep];
+
+  function resetForm() {
+    setPatientName('');
+    setAge('');
+    setPhone('');
+    setComplaint('');
+    setVisitType('walk-in');
+    setLiveTranscript('');
+    setVoiceDraft(null);
+    setVoiceError(null);
+    setSubmitError(null);
+    setConfirmedToken(null);
+  }
+
+  if (confirmedToken !== null) {
+    return (
+      <div
+        style={{
+          background: '#f0fdf4',
+          border: '2px solid #86efac',
+          borderRadius: 'var(--radius-xl)',
+          boxShadow: 'var(--shadow-sm)',
+          padding: '2.5rem',
+          textAlign: 'center',
+          display: 'grid',
+          gap: '1.25rem',
+        }}
+      >
+        <div
+          style={{
+            width: '5rem',
+            height: '5rem',
+            borderRadius: '999px',
+            background: 'var(--color-accent)',
+            color: 'white',
+            display: 'grid',
+            placeItems: 'center',
+            fontSize: '2rem',
+            fontWeight: 800,
+            margin: '0 auto',
+          }}
+        >
+          #{confirmedToken}
+        </div>
+        <h2 style={{ fontSize: '1.5rem', fontWeight: 800, color: '#166534' }}>
+          Token #{confirmedToken} — Patient registered
+        </h2>
+        <p style={{ color: '#15803d' }}>
+          The appointment has been created and added to today&apos;s queue.
+        </p>
+        <button
+          type="button"
+          onClick={resetForm}
+          style={{
+            border: 'none',
+            borderRadius: 'var(--radius-md)',
+            padding: '0.95rem 1.5rem',
+            background: 'var(--color-primary)',
+            color: 'white',
+            fontWeight: 800,
+            fontSize: '1rem',
+            boxShadow: 'var(--shadow-sm)',
+            cursor: 'pointer',
+            alignSelf: 'center',
+            justifySelf: 'center',
+          }}
+        >
+          Register Another
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div
@@ -407,6 +482,21 @@ export default function PatientIntakeForm({
           </p>
         </div>
 
+        {mockMode && (
+          <div
+            style={{
+              background: '#fef9c3',
+              padding: '0.4rem 0.75rem',
+              borderRadius: 6,
+              fontSize: '0.75rem',
+              fontWeight: 700,
+              color: '#a16207',
+            }}
+          >
+            [MOCK MODE — voice disabled]
+          </div>
+        )}
+
         <div
           style={{
             display: 'flex',
@@ -418,7 +508,7 @@ export default function PatientIntakeForm({
           <button
             type="button"
             onClick={isRecording ? stopRecording : () => void startRecording()}
-            disabled={isProcessingVoice || isSubmitting}
+            disabled={mockMode || isProcessingVoice || isSubmitting}
             style={{
               border: 'none',
               borderRadius: '999px',
@@ -627,6 +717,7 @@ export default function PatientIntakeForm({
         )}
       </section>
 
+      <div className="input-safe-area">
       <form
         onSubmit={handleSubmit}
         style={{
@@ -787,6 +878,7 @@ export default function PatientIntakeForm({
           </button>
         </div>
       </form>
+      </div>
     </div>
   );
 }

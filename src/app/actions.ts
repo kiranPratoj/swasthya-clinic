@@ -390,6 +390,54 @@ export async function getPatientByPhone(phone: string): Promise<PatientWithHisto
   return { patient: patient as Patient, appointments: (appointments ?? []) as Appointment[] };
 }
 
+export async function getAllPatients(): Promise<
+  Array<{ id: string; name: string; phone: string; age: number | null; visitCount: number; lastVisit: string | null }>
+> {
+  const clinicId = await getClinicId();
+  const db = getDb();
+
+  const { data: patients, error: patientsError } = await db
+    .from('patients')
+    .select('id, name, phone, age')
+    .eq('clinic_id', clinicId)
+    .order('name', { ascending: true })
+    .limit(200);
+
+  if (patientsError) throw new Error(patientsError.message);
+  if (!patients || patients.length === 0) return [];
+
+  const patientIds = patients.map((p) => p.id);
+  const { data: appointments, error: appointmentsError } = await db
+    .from('appointments')
+    .select('patient_id, booked_for')
+    .eq('clinic_id', clinicId)
+    .in('patient_id', patientIds)
+    .order('booked_for', { ascending: false });
+
+  if (appointmentsError) throw new Error(appointmentsError.message);
+
+  const metrics = new Map<string, { visitCount: number; lastVisit: string | null }>();
+  for (const appt of appointments ?? []) {
+    const current = metrics.get(appt.patient_id) ?? { visitCount: 0, lastVisit: null };
+    metrics.set(appt.patient_id, {
+      visitCount: current.visitCount + 1,
+      lastVisit: current.lastVisit ?? appt.booked_for,
+    });
+  }
+
+  return patients.map((p) => {
+    const m = metrics.get(p.id);
+    return {
+      id: p.id,
+      name: p.name,
+      phone: p.phone ?? '',
+      age: p.age ?? null,
+      visitCount: m?.visitCount ?? 0,
+      lastVisit: m?.lastVisit ?? null,
+    };
+  });
+}
+
 export async function searchPatients(
   query: string
 ): Promise<Array<{ id: string; name: string; phone: string; visitCount: number; lastVisit: string | null }>> {
@@ -657,3 +705,39 @@ export async function processVoiceIntake(fd: FormData) {
   const { processPatientVoiceInput } = await import('@/lib/patientExtractionAdapter');
   return processPatientVoiceInput(fd);
 }
+
+export async function callNextPatient(): Promise<void> {
+  const clinicId = await getClinicId();
+  const db = getDb();
+  const today = new Date().toISOString().split('T')[0];
+
+  // Find the first waiting appointment (booked or confirmed) for today
+  const { data: nextAppt, error: findError } = await db
+    .from('appointments')
+    .select('id')
+    .eq('clinic_id', clinicId)
+    .eq('booked_for', today)
+    .in('status', ['booked', 'confirmed'])
+    .order('token_number', { ascending: true })
+    .limit(1)
+    .maybeSingle();
+
+  if (findError) throw new Error(findError.message);
+  if (!nextAppt) return;
+
+  // Update status to in_progress
+  const { error: updateError } = await db
+    .from('appointments')
+    .update({ status: 'in_progress' })
+    .eq('id', nextAppt.id)
+    .eq('clinic_id', clinicId);
+
+  if (updateError) throw new Error(updateError.message);
+
+  await auditLog(clinicId, 'doctor', 'called_next', nextAppt.id);
+
+  const slug = await getClinicSlug(clinicId);
+  revalidatePath(`/${slug}/queue`);
+  revalidatePath(`/${slug}/admin`);
+}
+

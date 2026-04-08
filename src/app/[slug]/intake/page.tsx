@@ -93,7 +93,11 @@ export default async function IntakePage({
           </p>
         </div>
 
-        <PatientIntakeForm doctorId={doctor.id} slug={slug} />
+        <PatientIntakeForm
+          doctorId={doctor.id}
+          slug={slug}
+          mockMode={!process.env.SARVAM_API_KEY}
+        />
       </div>
     </main>
   );

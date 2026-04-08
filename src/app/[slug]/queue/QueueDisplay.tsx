@@ -59,6 +59,18 @@ function getTokenCircleColor(status: AppointmentStatus): string {
   return '#0891b2';
 }
 
+function formatWaitTime(createdAt: string): string {
+  const diff = Math.floor((Date.now() - new Date(createdAt).getTime()) / 60000);
+  if (diff < 1) return 'just now';
+  if (diff === 1) return '1 min ago';
+  return `${diff} min ago`;
+}
+
+function truncateComplaint(complaint: string, maxLen = 40): string {
+  if (complaint.length <= maxLen) return complaint;
+  return complaint.slice(0, maxLen) + '…';
+}
+
 function getActionConfig(status: AppointmentStatus): {
   label: string;
   nextStatus: AppointmentStatus | null;
@@ -320,7 +332,7 @@ export default function QueueDisplay({
           }}
         >
           <div style={{ display: 'grid', gap: '0.45rem' }}>
-            <p style={{ fontSize: '1.15rem', fontWeight: 800 }}>No patients in queue today</p>
+            <p style={{ fontSize: '1.3rem', fontWeight: 800 }}>Queue is clear for today ✓</p>
             <p style={{ color: 'var(--color-text-muted)' }}>ಇಂದು ಯಾವ ರೋಗಿಗಳೂ ಇಲ್ಲ</p>
           </div>
         </div>
@@ -380,7 +392,13 @@ export default function QueueDisplay({
                       )}
                     </div>
 
-                    <p style={{ color: 'var(--color-text-muted)' }}>{item.complaint}</p>
+                    <p style={{ color: 'var(--color-text-muted)' }}>
+                      {truncateComplaint(item.complaint)}
+                    </p>
+
+                    <p style={{ color: 'var(--color-text-muted)', fontSize: '0.8rem' }}>
+                      {formatWaitTime(item.created_at)}
+                    </p>
 
                     <div style={{ display: 'flex', gap: '0.6rem', flexWrap: 'wrap' }}>
                       <span
