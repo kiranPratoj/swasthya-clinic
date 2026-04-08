@@ -15,7 +15,7 @@
 ---
 
 ## Task 2 — Mobile page hardening: Queue + Intake + Patients
-**Status:** [ ]
+**Status:** [x] DONE — 02e48da
 **Files:**
 - `src/app/[slug]/queue/page.tsx` + `QueueDisplay.tsx`
 - `src/app/[slug]/intake/page.tsx` (and child components)

@@ -2,44 +2,60 @@
 # Auto-managed by Claude monitor. Do not edit manually.
 # Updated: 2026-04-09
 
-## → WORK ON THIS NOW: Task 2 — Mobile page hardening
+## → WORK ON THIS NOW: Task 3 — Admin Dashboard with real DB queries
 
-Task 1 (StaffBottomNav + layout shell) is already DONE.
+### File to rework: `src/app/[slug]/admin/page.tsx`
 
-### Queue page hardening
-**Files:** `src/app/[slug]/queue/page.tsx`, `src/app/[slug]/queue/QueueDisplay.tsx`
+CRITICAL:
+- Server component — no `'use client'` at top level
+- `params` is a Promise — `const { slug } = await params;`
+- Get clinicId from `const clinicId = (await headers()).get('x-clinic-id');`
+- No Tailwind, no new packages, inline styles only
 
-CRITICAL: `params` is a Promise — `const { slug } = await params;`
-No Tailwind. No new packages. Inline styles + globals.css classes only.
+### Stats (all for today's date)
+```ts
+const today = new Date().toISOString().split('T')[0]; // e.g. "2026-04-09"
+// Query appointments table filtering: clinic_id=clinicId AND booked_for=today
+// patients_seen: count where status='done'
+// waiting: count where status='waiting'
+// consulting: count where status='consulting'
+// no_shows: count where status='no-show'
+```
 
-1. Each queue row must show: token number badge, patient name, complaint (truncated 40 chars), wait time, status pill
-2. Add "Call Next" button at top → server action updating first `waiting` appointment to `consulting`
-3. Wrap QueueDisplay in a client component that calls `router.refresh()` every 30 seconds
-4. Empty state: "Queue is clear for today." centered
+### Weekly bar chart (pure CSS, no library)
+- Query last 7 days: for each day, count appointments where booked_for = that day
+- Render as flex row, align-items: flex-end
+- Each bar: `<div style={{ height: \`${(count/maxCount)*80}px\`, minHeight: 4, background: 'var(--color-primary)', width: 28, borderRadius: '4px 4px 0 0' }}>`
+- Day label below: Mon/Tue/Wed etc.
 
-### Intake page hardening
-**File:** `src/app/[slug]/intake/page.tsx` (and child components)
+### Flagged queue (waiting > 30 minutes)
+```ts
+const thirtyMinAgo = new Date(Date.now() - 30 * 60 * 1000).toISOString();
+// Query: status='waiting' AND booked_for=today AND created_at < thirtyMinAgo
+// Join with patients table to get name
+```
+- If any results: show red card per patient — name + "Waiting Xm" in bold red
+- Hide entire section if no flagged patients
 
-1. After successful submit: show confirmation card with token number + "Add Another" button
-2. If `process.env.SARVAM_API_KEY` is falsy: show `<div style={{background:'#fef9c3',padding:'0.4rem 0.75rem',borderRadius:6,fontSize:'0.75rem',fontWeight:700,color:'#a16207'}}>[MOCK MODE — voice disabled]</div>` near voice button
-3. Wrap form in `<div className="input-safe-area">` (already in globals.css)
+### Recent activity feed (last 10)
+- Query appointments ordered by updated_at desc, limit 10, join patients
+- Format each: `"Priya Kumar · waiting → consulting · 8 min ago"`
+- Relative time: `Math.floor((Date.now() - new Date(updated_at).getTime()) / 60000) + ' min ago'`
+- If < 1 min: "Just now"
 
-### Patients page hardening
-**File:** `src/app/[slug]/patients/page.tsx`
+### Commit after completing
+```bash
+git add src/app/[slug]/admin
+git commit -m "feat: admin dashboard — real DB stats, CSS bar chart, flagged queue, activity feed"
+git push origin main
+```
 
-1. Make it a client component OR extract a client search wrapper
-2. Search input filters by name or phone client-side (no network)
-3. Patient cards: name, phone, age, last visit date, visit count
-4. No-results state when search has no matches
-
-### After completing this task:
-Run `npm run build` — must be green.
-Commit: `git add src/app/[slug]/queue src/app/[slug]/intake src/app/[slug]/patients && git commit -m "feat: mobile page hardening — queue auto-refresh, intake confirmation, patient search"`
-Then read QUEUE.md Task 3 for next work.
+Then read QUEUE.md Task 4 (AI Scribe) for next work.
 
 ## Completed tasks
 - [x] Task 1 — StaffBottomNav + layout mobile shell
+- [x] Task 2 — Mobile page hardening (02e48da)
 
 ## Next task after this
-Task 3 — Admin Dashboard with real DB queries
+Task 4 — AI Scribe: `/[slug]/queue/[appointmentId]/consult/` route
 See QUEUE.md for full spec.
