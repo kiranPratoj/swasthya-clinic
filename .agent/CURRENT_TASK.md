@@ -2,60 +2,111 @@
 # Auto-managed by Claude monitor. Do not edit manually.
 # Updated: 2026-04-09
 
-## → WORK ON THIS NOW: Task 3 — Admin Dashboard with real DB queries
-
-### File to rework: `src/app/[slug]/admin/page.tsx`
+## → WORK ON THIS NOW: Task 4 — AI Scribe (voice → SOAP → discharge)
 
 CRITICAL:
-- Server component — no `'use client'` at top level
-- `params` is a Promise — `const { slug } = await params;`
-- Get clinicId from `const clinicId = (await headers()).get('x-clinic-id');`
-- No Tailwind, no new packages, inline styles only
+- `params` is a Promise — `const { slug, appointmentId } = await params;`
+- No Tailwind. No new npm packages. Inline styles only.
+- Check `CONTRACTS.md` for Appointment and VisitHistory types before writing DB inserts.
+- Use existing adapters: `src/lib/voiceAdapter.ts` (STT), `src/lib/sarvamChatAdapter.ts` (SOAP), `src/lib/ttsAdapter.ts` (TTS)
 
-### Stats (all for today's date)
+### New files to create
+
+**`src/app/[slug]/queue/[appointmentId]/consult/page.tsx`** (server component)
+- `await params` → slug + appointmentId
+- Fetch appointment + patient from DB
+- Render: patient name + complaint at top, then `<ConsultForm>`
+
+**`src/app/[slug]/queue/[appointmentId]/consult/ConsultForm.tsx`** (`'use client'`)
+
+3-step UI:
+
+**Step 1 — Record**
+- Large mic button (60px circle, var(--color-primary) background)
+- On click: `navigator.mediaDevices.getUserMedia({ audio: true })` → `MediaRecorder`
+- Record in chunks (ondataavailable), accumulate blobs
+- On stop: POST blob to `/api/transcribe-chunk` (already exists) as FormData with field `audio`
+- Show live transcript text as it comes back
+- "Stop Recording" button switches to Step 2
+
+**Step 2 — Generate SOAP note**
+- POST transcript to new endpoint `/api/soap-note` (create this)
+- `/api/soap-note/route.ts`: calls `sarvamChatAdapter` with system prompt:
+  ```
+  You are a medical scribe. Convert this consultation transcript into a structured SOAP note.
+  Return only valid JSON: { "subjective": "...", "objective": "...", "assessment": "...", "plan": "..." }
+  ```
+- Show loading spinner while generating
+
+**Step 3 — Edit & Save**
+- 4 textareas: Subjective / Objective / Assessment / Plan (pre-filled from SOAP)
+- Prescription rows: each row has drug name, dose, frequency, duration inputs. "Add row" button.
+- Follow-up date input (type="date")
+- Submit button → calls `saveVisitRecord()` server action
+
+**`src/app/api/soap-note/route.ts`** (new API route)
 ```ts
-const today = new Date().toISOString().split('T')[0]; // e.g. "2026-04-09"
-// Query appointments table filtering: clinic_id=clinicId AND booked_for=today
-// patients_seen: count where status='done'
-// waiting: count where status='waiting'
-// consulting: count where status='consulting'
-// no_shows: count where status='no-show'
+import { sarvamChatAdapter } from '@/lib/sarvamChatAdapter'; // check exact export
+export async function POST(req: Request) {
+  const { transcript } = await req.json();
+  const result = await sarvamChatAdapter(/* system prompt */, transcript);
+  return Response.json(result);
+}
 ```
 
-### Weekly bar chart (pure CSS, no library)
-- Query last 7 days: for each day, count appointments where booked_for = that day
-- Render as flex row, align-items: flex-end
-- Each bar: `<div style={{ height: \`${(count/maxCount)*80}px\`, minHeight: 4, background: 'var(--color-primary)', width: 28, borderRadius: '4px 4px 0 0' }}>`
-- Day label below: Mon/Tue/Wed etc.
-
-### Flagged queue (waiting > 30 minutes)
+### Server action to add in `src/app/actions.ts`
 ```ts
-const thirtyMinAgo = new Date(Date.now() - 30 * 60 * 1000).toISOString();
-// Query: status='waiting' AND booked_for=today AND created_at < thirtyMinAgo
-// Join with patients table to get name
+export async function saveVisitRecord(
+  appointmentId: string,
+  soap: { subjective: string; objective: string; assessment: string; plan: string },
+  prescriptions: Array<{ drug: string; dose: string; frequency: string; duration: string }>,
+  followUpDate: string
+) {
+  const db = getDb();
+  // 1. Get appointment to find clinic_id, patient_id, doctor_id
+  const { data: appt } = await db.from('appointments').select('*').eq('id', appointmentId).single();
+  // 2. Insert visit_history
+  await db.from('visit_history').insert({
+    clinic_id: appt.clinic_id,
+    patient_id: appt.patient_id,
+    doctor_id: appt.doctor_id,
+    appointment_id: appointmentId,
+    notes: JSON.stringify({ soap, prescriptions, followUpDate }),
+    created_at: new Date().toISOString(),
+  });
+  // 3. Update appointment status to 'done'
+  await db.from('appointments').update({ status: 'done' }).eq('id', appointmentId);
+}
 ```
-- If any results: show red card per patient — name + "Waiting Xm" in bold red
-- Hide entire section if no flagged patients
 
-### Recent activity feed (last 10)
-- Query appointments ordered by updated_at desc, limit 10, join patients
-- Format each: `"Priya Kumar · waiting → consulting · 8 min ago"`
-- Relative time: `Math.floor((Date.now() - new Date(updated_at).getTime()) / 60000) + ' min ago'`
-- If < 1 min: "Just now"
+### Printable discharge card
+After save success, show a print-ready section:
+```tsx
+<div className="print-only">  {/* globals.css: display:none, shown on print */}
+  <h2>{clinicName}</h2>
+  <p>Patient: {patient.name} | Date: {today} | Dr. {doctorName}</p>
+  <h3>Diagnosis</h3><p>{soap.assessment}</p>
+  <h3>Prescription</h3>
+  <table>... prescriptions rows ...</table>
+  <p>Follow-up: {followUpDate}</p>
+</div>
+<button onClick={() => window.print()}>Print Discharge Card</button>
+```
 
-### Commit after completing
+### After completing
 ```bash
-git add src/app/[slug]/admin
-git commit -m "feat: admin dashboard — real DB stats, CSS bar chart, flagged queue, activity feed"
+git add src/app/[slug]/queue/[appointmentId] src/app/api/soap-note src/app/actions.ts
+git commit -m "feat: AI scribe — voice recording → SOAP note → discharge card"
 git push origin main
 ```
 
-Then read QUEUE.md Task 4 (AI Scribe) for next work.
+Then read QUEUE.md Task 5 for next work.
 
 ## Completed tasks
 - [x] Task 1 — StaffBottomNav + layout mobile shell
 - [x] Task 2 — Mobile page hardening (02e48da)
+- [x] Task 3 — Admin dashboard (a0e5681)
 
 ## Next task after this
-Task 4 — AI Scribe: `/[slug]/queue/[appointmentId]/consult/` route
+Task 5 — Patient Portal: PatientBottomNav + tabbed shell + TTS
 See QUEUE.md for full spec.

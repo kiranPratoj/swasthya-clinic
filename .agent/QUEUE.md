@@ -45,7 +45,7 @@
 ---
 
 ## Task 3 — Admin Dashboard with real DB queries
-**Status:** [ ]
+**Status:** [x] DONE — a0e5681
 **Files:** `src/app/[slug]/admin/page.tsx`
 
 **CRITICAL:** Server component only. No `'use client'` at top level. Get clinicId from `headers()`. All data from real Supabase queries.
