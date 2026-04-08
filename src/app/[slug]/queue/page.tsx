@@ -9,7 +9,8 @@ function getTodayIsoDate(): string {
   return localTime.toISOString().split('T')[0];
 }
 
-export default async function QueuePage() {
+export default async function QueuePage({ params }: { params: Promise<{ slug: string }> }) {
+  const { slug } = await params;
   const clinicId = (await headers()).get('x-clinic-id');
 
   if (!clinicId) {
@@ -69,7 +70,7 @@ export default async function QueuePage() {
           </form>
         )}
 
-        <QueueDisplay initialQueue={queue} clinicId={clinicId} />
+        <QueueDisplay initialQueue={queue} clinicId={clinicId} slug={slug} />
       </div>
     </main>
   );

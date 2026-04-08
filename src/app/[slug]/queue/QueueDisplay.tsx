@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import { getClinicQueue, updateAppointmentStatus } from '@/app/actions';
@@ -12,6 +13,7 @@ import QueueFilters from './QueueFilters';
 type QueueDisplayProps = {
   initialQueue: QueueItem[];
   clinicId: string;
+  slug: string;
 };
 
 function formatDateLabel(date: Date): string {
@@ -115,6 +117,7 @@ function getActionConfig(status: AppointmentStatus): {
 export default function QueueDisplay({
   initialQueue,
   clinicId,
+  slug,
 }: QueueDisplayProps) {
   const [queue, setQueue] = useState(initialQueue);
   const [filteredQueue, setFilteredQueue] = useState(initialQueue);
@@ -478,6 +481,28 @@ export default function QueueDisplay({
                     )}
 
                     <AppointmentActions appointmentId={item.id} />
+
+                    {(item.status === 'in_progress' || item.status === 'confirmed' || item.status === 'booked') && (
+                      <Link
+                        href={`/${slug}/queue/${item.id}/consult`}
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          border: '2px solid var(--color-primary)',
+                          borderRadius: 'var(--radius-md)',
+                          padding: '0.6rem 1rem',
+                          minWidth: '10.5rem',
+                          background: 'white',
+                          color: 'var(--color-primary)',
+                          fontWeight: 700,
+                          fontSize: '0.9rem',
+                          textDecoration: 'none',
+                        }}
+                      >
+                        AI Scribe
+                      </Link>
+                    )}
                   </div>
                 </div>
               </article>

@@ -706,6 +706,38 @@ export async function processVoiceIntake(fd: FormData) {
   return processPatientVoiceInput(fd);
 }
 
+export async function saveVisitRecord(
+  appointmentId: string,
+  soap: { subjective: string; objective: string; assessment: string; plan: string },
+  prescriptions: Array<{ drug: string; dose: string; frequency: string; duration: string }>,
+  followUpDate: string
+): Promise<void> {
+  const db = getDb();
+  const { data: appt, error: apptError } = await db
+    .from('appointments')
+    .select('*')
+    .eq('id', appointmentId)
+    .single();
+  if (apptError || !appt) throw new Error('Appointment not found');
+
+  const { error: insertError } = await db.from('visit_history').insert({
+    clinic_id: appt.clinic_id,
+    patient_id: appt.patient_id,
+    appointment_id: appointmentId,
+    summary: JSON.stringify({ soap, prescriptions, followUpDate }),
+    created_at: new Date().toISOString(),
+  });
+  if (insertError) throw new Error(insertError.message);
+
+  const { error: updateError } = await db
+    .from('appointments')
+    .update({ status: 'completed' })
+    .eq('id', appointmentId);
+  if (updateError) throw new Error(updateError.message);
+
+  revalidatePath(`/${appt.clinic_id}/queue`);
+}
+
 export async function callNextPatient(): Promise<void> {
   const clinicId = await getClinicId();
   const db = getDb();
