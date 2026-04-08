@@ -80,7 +80,7 @@ const today = new Date().toISOString().split('T')[0]; // "2026-04-09"
 ---
 
 ## Task 4 — AI Scribe: Consult page
-**Status:** [ ]
+**Status:** [x] DONE — 1a4ffa1
 **Files:**
 - `src/app/[slug]/queue/[appointmentId]/consult/page.tsx` (new — server component shell)
 - `src/app/[slug]/queue/[appointmentId]/consult/ConsultForm.tsx` (new — client component)

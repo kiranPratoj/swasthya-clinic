@@ -2,111 +2,98 @@
 # Auto-managed by Claude monitor. Do not edit manually.
 # Updated: 2026-04-09
 
-## → WORK ON THIS NOW: Task 4 — AI Scribe (voice → SOAP → discharge)
+## → WORK ON THIS NOW: Task 5 — Patient Portal tabbed shell + PatientBottomNav + TTS
 
 CRITICAL:
-- `params` is a Promise — `const { slug, appointmentId } = await params;`
+- Both `params` AND `searchParams` are Promises — `const { slug, token } = await params; const { tab } = await searchParams;`
 - No Tailwind. No new npm packages. Inline styles only.
-- Check `CONTRACTS.md` for Appointment and VisitHistory types before writing DB inserts.
-- Use existing adapters: `src/lib/voiceAdapter.ts` (STT), `src/lib/sarvamChatAdapter.ts` (SOAP), `src/lib/ttsAdapter.ts` (TTS)
+- Check CONTRACTS.md for Patient, Appointment, VisitHistory types.
+- Use existing `src/lib/ttsAdapter.ts` for TTS.
 
-### New files to create
+### New component: `src/components/PatientBottomNav.tsx` (`'use client'`)
+Props: `basePath: string`, `activeTab: 'appointments' | 'history' | 'raise'`
 
-**`src/app/[slug]/queue/[appointmentId]/consult/page.tsx`** (server component)
-- `await params` → slug + appointmentId
-- Fetch appointment + patient from DB
-- Render: patient name + complaint at top, then `<ConsultForm>`
+3 tabs with Links:
+- Appointments: `${basePath}?tab=appointments` — icon: calendar svg
+- History: `${basePath}?tab=history` — icon: clock svg  
+- Raise Issue: `${basePath}?tab=raise` — icon: plus-circle svg
 
-**`src/app/[slug]/queue/[appointmentId]/consult/ConsultForm.tsx`** (`'use client'`)
-
-3-step UI:
-
-**Step 1 — Record**
-- Large mic button (60px circle, var(--color-primary) background)
-- On click: `navigator.mediaDevices.getUserMedia({ audio: true })` → `MediaRecorder`
-- Record in chunks (ondataavailable), accumulate blobs
-- On stop: POST blob to `/api/transcribe-chunk` (already exists) as FormData with field `audio`
-- Show live transcript text as it comes back
-- "Stop Recording" button switches to Step 2
-
-**Step 2 — Generate SOAP note**
-- POST transcript to new endpoint `/api/soap-note` (create this)
-- `/api/soap-note/route.ts`: calls `sarvamChatAdapter` with system prompt:
-  ```
-  You are a medical scribe. Convert this consultation transcript into a structured SOAP note.
-  Return only valid JSON: { "subjective": "...", "objective": "...", "assessment": "...", "plan": "..." }
-  ```
-- Show loading spinner while generating
-
-**Step 3 — Edit & Save**
-- 4 textareas: Subjective / Objective / Assessment / Plan (pre-filled from SOAP)
-- Prescription rows: each row has drug name, dose, frequency, duration inputs. "Add row" button.
-- Follow-up date input (type="date")
-- Submit button → calls `saveVisitRecord()` server action
-
-**`src/app/api/soap-note/route.ts`** (new API route)
-```ts
-import { sarvamChatAdapter } from '@/lib/sarvamChatAdapter'; // check exact export
-export async function POST(req: Request) {
-  const { transcript } = await req.json();
-  const result = await sarvamChatAdapter(/* system prompt */, transcript);
-  return Response.json(result);
-}
-```
-
-### Server action to add in `src/app/actions.ts`
-```ts
-export async function saveVisitRecord(
-  appointmentId: string,
-  soap: { subjective: string; objective: string; assessment: string; plan: string },
-  prescriptions: Array<{ drug: string; dose: string; frequency: string; duration: string }>,
-  followUpDate: string
-) {
-  const db = getDb();
-  // 1. Get appointment to find clinic_id, patient_id, doctor_id
-  const { data: appt } = await db.from('appointments').select('*').eq('id', appointmentId).single();
-  // 2. Insert visit_history
-  await db.from('visit_history').insert({
-    clinic_id: appt.clinic_id,
-    patient_id: appt.patient_id,
-    doctor_id: appt.doctor_id,
-    appointment_id: appointmentId,
-    notes: JSON.stringify({ soap, prescriptions, followUpDate }),
-    created_at: new Date().toISOString(),
-  });
-  // 3. Update appointment status to 'done'
-  await db.from('appointments').update({ status: 'done' }).eq('id', appointmentId);
-}
-```
-
-### Printable discharge card
-After save success, show a print-ready section:
+Same fixed-bottom shell pattern as StaffBottomNav (64px height, border-top, safe-area):
 ```tsx
-<div className="print-only">  {/* globals.css: display:none, shown on print */}
-  <h2>{clinicName}</h2>
-  <p>Patient: {patient.name} | Date: {today} | Dr. {doctorName}</p>
-  <h3>Diagnosis</h3><p>{soap.assessment}</p>
-  <h3>Prescription</h3>
-  <table>... prescriptions rows ...</table>
-  <p>Follow-up: {followUpDate}</p>
-</div>
-<button onClick={() => window.print()}>Print Discharge Card</button>
+<nav style={{
+  position: 'fixed', bottom: 0, left: 0, right: 0,
+  height: 'calc(64px + env(safe-area-inset-bottom))',
+  paddingBottom: 'env(safe-area-inset-bottom)',
+  background: '#ffffff',
+  borderTop: '1px solid var(--color-border)',
+  display: 'flex', alignItems: 'stretch', zIndex: 80,
+}}>
+```
+Active tab color: `var(--color-primary)`, inactive: `#94a3b8`
+
+### Rework: `src/app/[slug]/patient/[token]/page.tsx` (server component)
+```ts
+const { slug, token } = await params;
+const { tab = 'appointments' } = await searchParams;
 ```
 
-### After completing
+Fetch patient data using token (check how current page resolves patient from token).
+Wrap content in `<main className="mobile-content-shell">`.
+Place `<PatientBottomNav basePath={`/${slug}/patient/${token}`} activeTab={tab} />` at bottom.
+
+**Tab: 'appointments'**
+- Next upcoming appointment: booked_for >= today, status != 'done'/'cancelled', order by booked_for asc, limit 1
+- Show card: date, time (if available), doctor name, token number, status pill
+- If today: show queue position ("You are #N in line") — count appointments with status='waiting' and token_number < this patient's token
+- If no upcoming: "No upcoming appointments. Book one below." with link to `/${slug}/book`
+
+**Tab: 'history'**
+- Query visit_history where patient_id = patient.id, order by created_at desc
+- Each card: date (formatted "Apr 9, 2026"), diagnosis from `JSON.parse(summary).soap.assessment` (handle parse errors gracefully with fallback "See notes")
+- "Listen" button (client component `HistoryCard` with `'use client'`):
+  - On click: POST to `/api/tts` with `{ text: diagnosis, language: 'kn-IN' }`
+  - Check how ttsAdapter exports — import correctly
+  - Play audio via `new Audio(blobUrl).play()` or response URL
+  - Show "Playing..." while loading, "Listen" when idle
+
+**Tab: 'raise'**
+- Simple form: complaint textarea (required, minLength 5), submit button
+- On submit: server action `raisePatientIssue(patientId, clinicId, complaint)` →
+  INSERT into appointments: `{ clinic_id, patient_id, doctor_id (fetch from clinic's doctor), status: 'waiting', visit_type: 'walk-in', complaint, booked_for: today, token_number: (max token for today + 1) }`
+- Success state: "Your concern has been raised. Token #N" 
+
+### Server action in `src/app/actions.ts`
+```ts
+export async function raisePatientIssue(patientId: string, clinicId: string, complaint: string) {
+  const db = getDb();
+  const today = new Date().toISOString().split('T')[0];
+  // Get doctor for this clinic
+  const { data: doctor } = await db.from('doctors').select('id').eq('clinic_id', clinicId).single();
+  // Get max token for today
+  const { data: tokens } = await db.from('appointments').select('token_number').eq('clinic_id', clinicId).eq('booked_for', today).order('token_number', { ascending: false }).limit(1);
+  const nextToken = (tokens?.[0]?.token_number ?? 0) + 1;
+  const { data } = await db.from('appointments').insert({
+    clinic_id: clinicId, patient_id: patientId, doctor_id: doctor?.id,
+    status: 'waiting', visit_type: 'walk-in', complaint,
+    booked_for: today, token_number: nextToken,
+  }).select('token_number').single();
+  return { tokenNumber: data?.token_number };
+}
+```
+
+### After completing:
+1. `npm run build` — fix all TypeScript errors
+2. Commit:
 ```bash
-git add src/app/[slug]/queue/[appointmentId] src/app/api/soap-note src/app/actions.ts
-git commit -m "feat: AI scribe — voice recording → SOAP note → discharge card"
+git add src/components/PatientBottomNav.tsx src/app/[slug]/patient src/app/actions.ts
+git commit -m "feat: patient portal — tabbed shell, PatientBottomNav, TTS history, raise issue"
 git push origin main
 ```
 
-Then read QUEUE.md Task 5 for next work.
+This is the FINAL task. After pushing, the swasthya-clinic feature set is complete.
 
 ## Completed tasks
 - [x] Task 1 — StaffBottomNav + layout mobile shell
 - [x] Task 2 — Mobile page hardening (02e48da)
 - [x] Task 3 — Admin dashboard (a0e5681)
-
-## Next task after this
-Task 5 — Patient Portal: PatientBottomNav + tabbed shell + TTS
-See QUEUE.md for full spec.
+- [x] Task 4 — AI Scribe (1a4ffa1)
