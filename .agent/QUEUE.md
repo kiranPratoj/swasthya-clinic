@@ -120,7 +120,7 @@ export async function saveVisitRecord(appointmentId: string, soap: object, presc
 ---
 
 ## Task 5 — Patient Portal: PatientBottomNav + tabbed shell
-**Status:** [ ]
+**Status:** [x] DONE — 3c11272
 **Files:**
 - `src/components/PatientBottomNav.tsx` (new)
 - `src/app/[slug]/patient/[token]/page.tsx` (rework)

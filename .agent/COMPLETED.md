@@ -8,3 +8,4 @@
 | Task 2 | Mobile page hardening — queue auto-refresh, intake confirmation, patient search | 02e48da | 2026-04-09 |
 | Task 3 | Admin dashboard — real DB stats, CSS bar chart, flagged queue, activity feed | a0e5681 | 2026-04-09 |
 | Task 4 | AI Scribe — voice → SOAP note → discharge card, saveVisitRecord action | 1a4ffa1 | 2026-04-09 |
+| Task 5 | Patient portal — PatientBottomNav, tabbed shell, TTS, raisePatientIssue | 3c11272 | 2026-04-09 |
