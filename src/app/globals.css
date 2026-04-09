@@ -367,3 +367,23 @@ label {
     display: block !important;
   }
 }
+
+/* ─── Mobile Bottom Nav Shell ───────────────── */
+/* Content area with padding for fixed bottom nav */
+.mobile-content-shell {
+  padding-bottom: calc(64px + env(safe-area-inset-bottom) + 1rem);
+}
+
+/* Hide desktop sub-nav on mobile when bottom nav is present */
+@media (max-width: 768px) {
+  .staff-sub-nav-desktop {
+    display: none;
+  }
+}
+
+/* Show bottom nav only on mobile */
+@media (min-width: 769px) {
+  .staff-bottom-nav-mobile {
+    display: none !important;
+  }
+}

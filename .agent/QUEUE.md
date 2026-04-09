@@ -10,7 +10,7 @@
 ---
 
 ## S1 — Verify and fix core actions + queue flow
-**Status:** [ ]
+**Status:** [x] DONE — 29da915 (all actions existed, SOAP fallback added)
 **Files:**
 - `src/app/actions.ts`
 - `src/app/[slug]/queue/QueueDisplay.tsx`
@@ -52,7 +52,7 @@ export async function callNextPatient(clinicId: string) {
 ---
 
 ## S2 — Fix intake → confirmation → token flow
-**Status:** [ ]
+**Status:** [x] DONE — 29da915 (already correct, mock mode + token card present)
 **Files:**
 - `src/app/[slug]/intake/page.tsx`
 - `src/app/[slug]/intake/PatientIntakeForm.tsx` (or similar)

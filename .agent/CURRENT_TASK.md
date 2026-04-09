@@ -2,80 +2,108 @@
 # Phase: Demo Stabilization
 # Updated: 2026-04-09
 
-## → WORK ON THIS NOW: S1 — Verify and fix core actions + queue flow
+## → WORK ON THIS NOW: S3+S4+S5 — Patient portal, Admin dashboard, End-to-end smoke test
 
-**Read these files first:**
-- `src/app/actions.ts` (search for: callNextPatient, getAppointmentByToken, getAllPatients)
-- `src/app/[slug]/queue/page.tsx`
-- `src/app/[slug]/queue/QueueDisplay.tsx`
+---
 
-**Check 1: Does `callNextPatient` exist?**
-Search actions.ts for `callNextPatient`. If missing, add it:
+## S3 — Fix patient portal: token URL + tab content
+
+**Files:**
+- `src/app/[slug]/patient/[token]/page.tsx`
+- `src/app/api/tts/route.ts` (may not exist — create if missing)
+
+**Read** `src/app/[slug]/patient/[token]/page.tsx` first.
+
+**Verify `getAppointmentByToken`** is called with `Number.parseInt(token, 10)` and returns patient data.
+
+**Tab content verification** — all 3 tabs must render:
+- `?tab=appointments` → upcoming appointment card with token number
+- `?tab=history` → visit history list, each with Listen button (or "Audio unavailable" if no Sarvam key)
+- `?tab=raise` → RaiseForm renders and submits
+
+**TTS Listen button:** POST to `/api/tts` — check if this route exists. If missing, create:
 ```ts
-export async function callNextPatient(clinicId: string) {
-  const db = getDb();
-  const today = new Date().toISOString().split('T')[0];
-  const { data: next } = await db
-    .from('appointments')
-    .select('id, token_number')
-    .eq('clinic_id', clinicId)
-    .eq('booked_for', today)
-    .in('status', ['booked', 'confirmed'])
-    .order('token_number', { ascending: true })
-    .limit(1)
-    .single();
-  if (!next) return null;
-  await db.from('appointments').update({ status: 'in_progress' }).eq('id', next.id);
-  return next;
+// src/app/api/tts/route.ts
+import { NextRequest, NextResponse } from 'next/server';
+
+export async function POST(req: NextRequest) {
+  const { text } = await req.json();
+  
+  if (!process.env.SARVAM_API_KEY) {
+    return NextResponse.json({ error: 'Audio unavailable' }, { status: 503 });
+  }
+  
+  try {
+    // Use sarvam TTS if available
+    const response = await fetch('https://api.sarvam.ai/text-to-speech', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'api-subscription-key': process.env.SARVAM_API_KEY,
+      },
+      body: JSON.stringify({ inputs: [text], target_language_code: 'kn-IN', speaker: 'meera' }),
+    });
+    const data = await response.json();
+    return NextResponse.json({ audio: data.audios?.[0] });
+  } catch {
+    return NextResponse.json({ error: 'Audio unavailable' }, { status: 503 });
+  }
 }
 ```
 
-**Check 2: Does `getAppointmentByToken` exist?**
-Search actions.ts. If missing, add it:
+**History tab Listen button:** If `/api/tts` returns 503, show "Audio unavailable" text instead of crashing.
+
+**Acceptance:** `/[slug]/patient/7` (any token) shows patient data, all 3 tabs render, raise form submits.
+
+---
+
+## S4 — Admin dashboard data + status enum
+
+**Files:**
+- `src/app/[slug]/admin/page.tsx`
+
+**Read** the current admin page. Verify the status enum values match: `completed`, `in_progress`, `booked`, `confirmed`, `no_show`.
+
+**Fix any mismatches:**
 ```ts
-export async function getAppointmentByToken(tokenNumber: number) {
-  const db = getDb();
-  const today = new Date().toISOString().split('T')[0];
-  const { data } = await db
-    .from('appointments')
-    .select('*, patient:patients(*)')
-    .eq('token_number', tokenNumber)
-    .eq('booked_for', today)
-    .single();
-  return data;
-}
+const done = appointments.filter(a => a.status === 'completed').length;
+const waiting = appointments.filter(a => ['booked', 'confirmed'].includes(a.status)).length;
+const consulting = appointments.filter(a => a.status === 'in_progress').length;
+const noShows = appointments.filter(a => a.status === 'no_show').length;
 ```
 
-**Check 3: Queue "Call Next" button**
-In `queue/page.tsx` or `QueueDisplay.tsx`, find the "Call Next" form/button. Verify:
-- It calls `callNextPatient` with the correct `clinicId`
-- clinicId comes from `(await headers()).get('x-clinic-id')`
-- After calling, the queue refreshes (router.refresh() or form revalidation)
+**Also verify:** The admin page uses `created_at` (not `updated_at` — that column does NOT exist) for any date-based queries or activity feeds.
 
-**Check 4: AI Scribe fallback**
-In `src/app/[slug]/queue/[appointmentId]/consult/ConsultForm.tsx`, wrap the `/api/soap-note` call in try/catch. On failure, set a fallback SOAP note so demo works without Sarvam:
-```ts
-} catch {
-  setSoap({
-    subjective: transcript || 'Patient presented with complaint.',
-    objective: 'Vital signs stable. Physical examination conducted.',
-    assessment: 'Diagnosis based on clinical presentation.',
-    plan: 'Prescribe medication as appropriate. Review in 1 week.',
-  });
-  setStep('edit');
-}
-```
+**Acceptance:** Admin dashboard shows correct stat counts without runtime errors.
 
-**After all checks, run:** `npm run build` — must be green.
+---
+
+## S5 — End-to-end smoke test + final commit
+
+Run this mental walkthrough — check the code paths for each step, fix any broken steps:
+
+1. **Onboard** — `/onboard` → clinic created → redirect to `/[slug]/queue` ✓
+2. **Register** — `/[slug]/intake` → form submit → token assigned → appears in queue
+3. **Call patient** — `/[slug]/queue` → "Call Next" → token moves to in_progress → consult link appears
+4. **Consult** — `/[slug]/queue/[id]/consult` → voice (or type) → generate SOAP (with fallback) → edit → save → discharge card
+5. **Patient portal** — `/[slug]/patient/1` → appointments tab → history tab → raise tab
+6. **Admin** — `/[slug]/admin` → correct counts
+
+**Run:** `npm run build` — must be green, zero TypeScript errors.
 
 **Commit:**
 ```bash
-git add src/app/actions.ts src/app/[slug]/queue src/app/[slug]/queue/[appointmentId]
-git commit -m "fix: callNextPatient + getAppointmentByToken + SOAP fallback for demo"
+git add -A
+git commit -m "fix: patient portal TTS, admin dashboard status enum, demo smoke test"
 git push origin main
 ```
 
-Then read QUEUE.md S2, S3, S4, S5 for remaining tasks.
+Then update `.agent/CURRENT_TASK.md`:
+```
+# STABILIZATION COMPLETE
+All S1-S5 tasks done. Build green. Demo ready.
+```
 
 ## Completed stabilization tasks
-- (none yet)
+- S1: callNextPatient + getAppointmentByToken verified, SOAP fallback added — 29da915
+- S2: Intake → token confirmation verified (already correct) — 29da915

@@ -1,0 +1,11 @@
+
+═══ ANTIGRAVITY RUN — Thu Apr  9 10:49:58 IST 2026 ═══
+Error: Input must be provided either through stdin or as a prompt argument when using --print
+═══ ANTIGRAVITY DONE — Thu Apr  9 10:50:02 IST 2026 ═══
+
+
+═══ ANTIGRAVITY RUN — Thu Apr  9 10:53:28 IST 2026 ═══
+Warning: no stdin data received in 3s, proceeding without it. If piping from a slow command, redirect stdin explicitly: < /dev/null to skip, or wait longer.
+Error: Input must be provided either through stdin or as a prompt argument when using --print
+═══ ANTIGRAVITY DONE — Thu Apr  9 10:53:34 IST 2026 ═══
+

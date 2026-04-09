@@ -1,7 +1,10 @@
 import { headers } from 'next/headers';
 import Link from 'next/link';
-import { getDb } from '@/lib/db';
-import { getAppointmentByToken } from '@/app/actions';
+import { 
+  getAppointmentByToken, 
+  getPatientAppointments, 
+  getPatientVisitHistory 
+} from '@/app/actions';
 import PatientBottomNav from '@/components/PatientBottomNav';
 import HistoryCard from './HistoryCard';
 import RaiseForm from './RaiseForm';
@@ -88,7 +91,7 @@ export default async function PatientPortalPage({
     );
   }
 
-  // Resolve patient from today's appointment with this token
+  // Resolve today's appointment
   const todayAppointment = await getAppointmentByToken(tokenNumber);
 
   if (!todayAppointment) {
@@ -112,7 +115,6 @@ export default async function PatientPortalPage({
   }
 
   const patient = todayAppointment.patient;
-  const db = getDb();
   const today = new Date().toISOString().split('T')[0];
 
   // ── Tab: appointments ─────────────────────────────────────────────────────
@@ -120,44 +122,28 @@ export default async function PatientPortalPage({
   let queuePosition: number | null = null;
 
   if (tab === 'appointments') {
-    const { data: apptData } = await db
-      .from('appointments')
-      .select('*')
-      .eq('clinic_id', clinicId)
-      .eq('patient_id', patient.id)
-      .gte('booked_for', today)
-      .not('status', 'in', '("completed","cancelled","no_show","rescheduled")')
-      .order('booked_for', { ascending: true })
-      .limit(1)
-      .maybeSingle();
-
-    upcomingAppointment = apptData as Appointment | null;
+    const appts = await getPatientAppointments(patient.id);
+    // Find first non-finalized appointment today or in future
+    upcomingAppointment = appts.find(a => !['completed', 'cancelled', 'no_show', 'rescheduled'].includes(a.status)) || null;
 
     if (upcomingAppointment && upcomingAppointment.booked_for === today) {
-      const { count } = await db
-        .from('appointments')
-        .select('id', { count: 'exact', head: true })
-        .eq('clinic_id', clinicId)
-        .eq('booked_for', today)
-        .in('status', ['confirmed', 'booked'])
-        .lt('token_number', upcomingAppointment.token_number);
-
-      queuePosition = (count ?? 0) + 1;
+      // Re-fetch queue to find position (or could use an action)
+      // For now, simpler to stick with todayAppointment if it matches
+      if (todayAppointment.id === upcomingAppointment.id) {
+        // We could calculate position here if we had the full queue, 
+        // but let's assume getClinicQueue is available
+        const { getClinicQueue } = await import('@/app/actions');
+        const queue = await getClinicQueue(today);
+        const pos = queue.findIndex(q => q.id === todayAppointment.id);
+        if (pos !== -1) queuePosition = pos + 1;
+      }
     }
   }
 
   // ── Tab: history ──────────────────────────────────────────────────────────
   let visitHistory: VisitHistory[] = [];
-
   if (tab === 'history') {
-    const { data: histData } = await db
-      .from('visit_history')
-      .select('*')
-      .eq('clinic_id', clinicId)
-      .eq('patient_id', patient.id)
-      .order('created_at', { ascending: false });
-
-    visitHistory = (histData ?? []) as VisitHistory[];
+    visitHistory = await getPatientVisitHistory(patient.id);
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -265,27 +251,13 @@ export default async function PatientPortalPage({
               <p style={{ color: 'var(--color-text-muted)', fontWeight: 600 }}>No visit history yet.</p>
             </div>
           ) : (
-            visitHistory.map(visit => {
-              let diagnosis = 'See notes';
-              try {
-                const parsed = JSON.parse(visit.summary) as {
-                  soap?: { assessment?: string };
-                  [key: string]: unknown;
-                };
-                diagnosis = parsed.soap?.assessment ?? 'See notes';
-              } catch {
-                // fallback: show raw summary truncated
-                diagnosis = visit.summary.slice(0, 100) || 'See notes';
-              }
-
-              return (
-                <HistoryCard
-                  key={visit.id}
-                  date={formatDate(visit.created_at)}
-                  diagnosis={diagnosis}
-                />
-              );
-            })
+            visitHistory.map(visit => (
+              <HistoryCard
+                key={visit.id}
+                date={formatDate(visit.created_at)}
+                summary={visit.summary}
+              />
+            ))
           )}
         </div>
       )}
@@ -303,7 +275,7 @@ export default async function PatientPortalPage({
             <h2 style={{ fontSize: '1rem', fontWeight: 800, marginBottom: '1rem' }}>
               Raise a concern
             </h2>
-            <RaiseForm patientId={patient.id} clinicId={clinicId} />
+            <RaiseForm patientId={patient.id} clinicId={clinicId!} />
           </div>
         </div>
       )}

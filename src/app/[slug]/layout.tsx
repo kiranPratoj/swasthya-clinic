@@ -2,6 +2,7 @@ import { headers } from 'next/headers';
 import { getDb } from '@/lib/db';
 import Link from 'next/link';
 import type { Clinic, Doctor } from '@/lib/types';
+import StaffBottomNav from '@/components/StaffBottomNav';
 
 async function getClinicContext(): Promise<{ clinic: Clinic; doctor: Doctor | null } | null> {
   const h = await headers();
@@ -16,6 +17,13 @@ async function getClinicContext(): Promise<{ clinic: Clinic; doctor: Doctor | nu
 
   if (!clinic) return null;
   return { clinic: clinic as Clinic, doctor: doctor as Doctor | null };
+}
+
+// Routes that are patient-facing — no staff nav
+const PATIENT_ROUTES = ['/book', '/patient/'];
+
+function isPatientRoute(slug: string, pathname: string): boolean {
+  return PATIENT_ROUTES.some(r => pathname.includes(`/${slug}${r}`));
 }
 
 export default async function SlugLayout({
@@ -33,8 +41,8 @@ export default async function SlugLayout({
 
   return (
     <div>
-      {/* Clinic sub-header */}
-      <div style={{
+      {/* Desktop sub-nav — hidden on mobile via .staff-sub-nav-desktop */}
+      <div className="staff-sub-nav-desktop" style={{
         background: '#f0f9ff',
         borderBottom: '1px solid #bae6fd',
         padding: '0.5rem 0',
@@ -84,8 +92,14 @@ export default async function SlugLayout({
         </div>
       </div>
 
-      <div className="max-w-7xl px-4 py-8">
+      {/* Content area — mobile-content-shell adds bottom padding for the fixed nav */}
+      <div className="max-w-7xl px-4 py-8 mobile-content-shell">
         {children}
+      </div>
+
+      {/* Mobile bottom nav — hidden on desktop via .staff-bottom-nav-mobile */}
+      <div className="staff-bottom-nav-mobile">
+        <StaffBottomNav slug={slug} doctorName={doctorName} />
       </div>
     </div>
   );

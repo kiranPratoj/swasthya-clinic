@@ -10,7 +10,7 @@ export default async function PatientsPage({
   const patients = await getAllPatients();
 
   return (
-    <main style={{ padding: '1.5rem 1rem' }}>
+    <main style={{ padding: '1.5rem 1rem' }} className="mobile-content-shell">
       <div className="max-w-5xl">
         <PatientsClient patients={patients} slug={slug} />
       </div>

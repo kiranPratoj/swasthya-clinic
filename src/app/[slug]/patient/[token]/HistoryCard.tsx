@@ -3,100 +3,164 @@ import { useState } from 'react';
 
 interface Props {
   date: string;
-  diagnosis: string;
+  summary: string;
 }
 
-export default function HistoryCard({ date, diagnosis }: Props) {
-  const [status, setStatus] = useState<'idle' | 'loading' | 'playing' | 'error'>('idle');
+export default function HistoryCard({ date, summary }: Props) {
+  const [isExpanded, setIsExpanded] = useState(false);
+  const [ttsStatus, setTtsStatus] = useState<'idle' | 'loading' | 'playing' | 'error'>('idle');
 
-  async function handleListen() {
-    if (status === 'loading' || status === 'playing') return;
-    setStatus('loading');
+  // Simple parsing logic for summary
+  // Summary might be JSON or structured string
+  let diagnosis = 'Click to view';
+  let prescription = '';
+  let fullTextForTts = summary;
+
+  try {
+    const parsed = JSON.parse(summary);
+    if (parsed.diagnosis) {
+      diagnosis = parsed.diagnosis;
+      prescription = parsed.prescription?.map((p: any) => `${p.drug}: ${p.dose} (${p.frequency})`).join('\n') || '';
+      fullTextForTts = `Diagnosis is ${diagnosis}. Prescription is ${prescription || 'none'}`;
+    }
+  } catch {
+    // Fallback: search for "Diagnosis:" and "Prescription:" labels
+    const diagMatch = summary.match(/Diagnosis:\s*(.*)/i);
+    const presMatch = summary.match(/Prescription:\s*([\s\S]*)/i);
+    
+    if (diagMatch) diagnosis = diagMatch[1].split('\n')[0].trim();
+    if (presMatch) prescription = presMatch[1].trim();
+  }
+
+  async function handleListen(e: React.MouseEvent) {
+    e.stopPropagation();
+    if (ttsStatus === 'loading' || ttsStatus === 'playing') return;
+    setTtsStatus('loading');
 
     try {
       const res = await fetch('/api/tts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: diagnosis, language: 'kn-IN' }),
+        body: JSON.stringify({ text: fullTextForTts }),
       });
 
       if (!res.ok) {
-        setStatus('error');
+        setTtsStatus('error');
         return;
       }
 
       const { audioBase64 } = await res.json() as { audioBase64: string };
       if (!audioBase64) {
-        setStatus('error');
+        setTtsStatus('error');
         return;
       }
 
-      // Convert base64 WAV to blob URL
-      const byteChars = atob(audioBase64);
-      const byteNumbers = new Uint8Array(byteChars.length);
-      for (let i = 0; i < byteChars.length; i++) {
-        byteNumbers[i] = byteChars.charCodeAt(i);
-      }
-      const blob = new Blob([byteNumbers], { type: 'audio/wav' });
-      const url = URL.createObjectURL(blob);
-
-      const audio = new Audio(url);
-      setStatus('playing');
-      audio.onended = () => {
-        setStatus('idle');
-        URL.revokeObjectURL(url);
-      };
-      audio.onerror = () => {
-        setStatus('error');
-        URL.revokeObjectURL(url);
-      };
+      const audio = new Audio(`data:audio/wav;base64,${audioBase64}`);
+      setTtsStatus('playing');
+      audio.onended = () => setTtsStatus('idle');
+      audio.onerror = () => setTtsStatus('error');
       await audio.play();
     } catch {
-      setStatus('error');
+      setTtsStatus('error');
     }
   }
 
-  const buttonLabel = status === 'loading' ? 'Loading…' : status === 'playing' ? 'Playing…' : status === 'error' ? 'Retry' : 'Listen';
-  const buttonColor = status === 'error' ? '#ef4444' : 'var(--color-primary)';
-
   return (
-    <div style={{
-      background: 'white',
-      border: '1px solid var(--color-border)',
-      borderRadius: 'var(--radius-lg)',
-      padding: '1rem',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      gap: '0.75rem',
-    }}>
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <p style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', fontWeight: 600, marginBottom: '0.25rem' }}>
-          {date}
-        </p>
-        <p style={{ fontSize: '0.9375rem', fontWeight: 700, color: 'var(--color-text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-          {diagnosis}
-        </p>
+    <div 
+      onClick={() => setIsExpanded(!isExpanded)}
+      style={{
+        background: 'white',
+        border: '1px solid var(--color-border)',
+        borderRadius: 'var(--radius-lg)',
+        boxShadow: 'var(--shadow-sm)',
+        overflow: 'hidden',
+        transition: 'all 0.2s',
+        cursor: 'pointer'
+      }}
+    >
+      <div style={{
+        padding: '1rem',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: '0.75rem',
+      }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <p style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', fontWeight: 600, marginBottom: '0.25rem' }}>
+            {date}
+          </p>
+          <p style={{ 
+            fontSize: '0.95rem', 
+            fontWeight: 800, 
+            color: 'var(--color-text)',
+            overflow: 'hidden',
+            textOverflow: isExpanded ? 'initial' : 'ellipsis',
+            whiteSpace: isExpanded ? 'normal' : 'nowrap'
+          }}>
+            {diagnosis}
+          </p>
+        </div>
+        
+        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+          {ttsStatus === 'error' ? (
+            <span style={{
+              padding: '0.4rem 0.7rem',
+              color: 'var(--color-error)',
+              fontSize: '0.75rem',
+              fontWeight: 700,
+              whiteSpace: 'nowrap',
+            }}>
+              Audio unavailable
+            </span>
+          ) : (
+            <button
+              type="button"
+              onClick={handleListen}
+              disabled={ttsStatus === 'loading' || ttsStatus === 'playing'}
+              style={{
+                padding: '0.4rem 0.7rem',
+                background: 'var(--color-primary-soft)',
+                color: 'var(--color-primary)',
+                border: 'none',
+                borderRadius: 'var(--radius-md)',
+                fontWeight: 800,
+                fontSize: '0.75rem',
+                whiteSpace: 'nowrap'
+              }}
+            >
+              {ttsStatus === 'loading' ? '...' : ttsStatus === 'playing' ? '🔊' : '🔊 Listen'}
+            </button>
+          )}
+          <span style={{ fontSize: '1.2rem', color: 'var(--color-text-muted)', transform: isExpanded ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }}>
+            ▼
+          </span>
+        </div>
       </div>
-      <button
-        type="button"
-        onClick={handleListen}
-        disabled={status === 'loading' || status === 'playing'}
-        style={{
-          flexShrink: 0,
-          padding: '0.5rem 0.875rem',
-          background: buttonColor,
-          color: '#fff',
-          border: 'none',
-          borderRadius: 'var(--radius-md)',
-          fontWeight: 700,
-          fontSize: '0.8125rem',
-          cursor: status === 'loading' || status === 'playing' ? 'not-allowed' : 'pointer',
-          opacity: status === 'loading' || status === 'playing' ? 0.7 : 1,
-        }}
-      >
-        {buttonLabel}
-      </button>
+
+      {isExpanded && (
+        <div style={{ 
+          padding: '0 1rem 1.25rem', 
+          fontSize: '0.9rem', 
+          borderTop: '1px solid var(--color-bg)',
+          marginTop: '-0.25rem',
+          paddingTop: '1rem'
+        }}>
+          {prescription ? (
+            <div style={{ display: 'grid', gap: '0.75rem' }}>
+              <div>
+                <strong style={{ display: 'block', fontSize: '0.7rem', textTransform: 'uppercase', color: 'var(--color-text-muted)', marginBottom: '0.25rem' }}>Prescription</strong>
+                <p style={{ whiteSpace: 'pre-wrap', lineHeight: 1.5 }}>{prescription}</p>
+              </div>
+              <div>
+                <strong style={{ display: 'block', fontSize: '0.7rem', textTransform: 'uppercase', color: 'var(--color-text-muted)', marginBottom: '0.25rem' }}>Full Notes</strong>
+                <p style={{ fontSize: '0.85rem', color: 'var(--color-text-muted)', fontStyle: 'italic' }}>{summary}</p>
+              </div>
+            </div>
+          ) : (
+            <p style={{ whiteSpace: 'pre-wrap', lineHeight: 1.5 }}>{summary}</p>
+          )}
+        </div>
+      )}
     </div>
   );
 }
