@@ -12,6 +12,7 @@ import type {
   Patient,
   PatientWithHistory,
   QueueItem,
+  VisitHistory,
 } from '@/lib/types';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -614,6 +615,34 @@ export async function getAppointmentByToken(token: number, date?: string): Promi
   return (data as QueueItem | null);
 }
 
+export async function getPatientAppointments(patientId: string): Promise<Appointment[]> {
+  const clinicId = await getClinicId();
+  const today = new Date().toISOString().split('T')[0];
+  const { data, error } = await getDb()
+    .from('appointments')
+    .select('*')
+    .eq('clinic_id', clinicId)
+    .eq('patient_id', patientId)
+    .gte('booked_for', today)
+    .order('booked_for', { ascending: true });
+  
+  if (error) throw new Error(error.message);
+  return data ?? [];
+}
+
+export async function getPatientVisitHistory(patientId: string): Promise<VisitHistory[]> {
+  const clinicId = await getClinicId();
+  const { data, error } = await getDb()
+    .from('visit_history')
+    .select('*')
+    .eq('clinic_id', clinicId)
+    .eq('patient_id', patientId)
+    .order('created_at', { ascending: false });
+
+  if (error) throw new Error(error.message);
+  return data ?? [];
+}
+
 // ─── Admin stats ──────────────────────────────────────────────────────────────
 
 export async function getAdminStats(date?: string) {
@@ -621,9 +650,10 @@ export async function getAdminStats(date?: string) {
   const db = getDb();
   const targetDate = date ?? new Date().toISOString().split('T')[0];
 
+  // 1. Fetch all appointments for the target date
   const { data: appts } = await db
     .from('appointments')
-    .select('status, created_at, token_number, complaint, visit_type, patient:patients(name)')
+    .select('id, status, created_at, token_number, complaint, visit_type, patient:patients(name)')
     .eq('clinic_id', clinicId)
     .eq('booked_for', targetDate)
     .order('token_number', { ascending: true });
@@ -633,16 +663,109 @@ export async function getAdminStats(date?: string) {
   const waiting = all.filter(a => a.status === 'booked' || a.status === 'confirmed').length;
   const consulting = all.filter(a => a.status === 'in_progress').length;
   const done = all.filter(a => a.status === 'completed').length;
+  const noShows = all.filter(a => a.status === 'no_show').length;
 
-  // Patients by hour (9–18)
-  const byHour: Record<number, number> = {};
-  for (let h = 9; h <= 18; h++) byHour[h] = 0;
-  for (const a of all) {
-    const h = new Date(a.created_at).getHours();
-    if (h >= 9 && h <= 18) byHour[h] = (byHour[h] ?? 0) + 1;
+  // 2. Calculate Average Wait Time from audit logs
+  // We look for transitions from 'confirmed' or 'booked' to 'in_progress'
+  const { data: logs } = await db
+    .from('audit_log')
+    .select('target_id, created_at, meta')
+    .eq('clinic_id', clinicId)
+    .eq('action', 'status_updated')
+    .gte('created_at', targetDate + 'T00:00:00')
+    .lte('created_at', targetDate + 'T23:59:59');
+
+  let totalWaitMs = 0;
+  let waitCount = 0;
+
+  for (const log of logs ?? []) {
+    const meta = log.meta as any;
+    if (meta?.status === 'in_progress') {
+      const appt = all.find(a => a.id === log.target_id);
+      if (appt) {
+        const waitMs = new Date(log.created_at).getTime() - new Date(appt.created_at).getTime();
+        if (waitMs > 0) {
+          totalWaitMs += waitMs;
+          waitCount++;
+        }
+      }
+    }
+  }
+  const avgWaitMins = waitCount > 0 ? Math.round(totalWaitMs / (waitCount * 60000)) : 0;
+
+  // 3. Weekly Trend (last 7 days)
+  const sevenDaysAgo = new Date();
+  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6);
+  const startDate = sevenDaysAgo.toISOString().split('T')[0];
+
+  const { data: trendData } = await db
+    .from('appointments')
+    .select('booked_for')
+    .eq('clinic_id', clinicId)
+    .gte('booked_for', startDate)
+    .lte('booked_for', targetDate);
+
+  const trend: Record<string, number> = {};
+  for (let i = 0; i < 7; i++) {
+    const d = new Date();
+    d.setDate(d.getDate() - i);
+    trend[d.toISOString().split('T')[0]] = 0;
+  }
+  for (const a of trendData ?? []) {
+    if (trend[a.booked_for] !== undefined) trend[a.booked_for]++;
+  }
+  const sortedTrend = Object.entries(trend).sort().map(([date, count]) => ({ date, count }));
+
+  // 4. Doctor Utilization
+  const doctor = await getDoctorForClinic();
+  let utilization = 0;
+  if (doctor) {
+    const dayOfWeek = new Date(targetDate).toLocaleDateString('en-US', { weekday: 'short' }).toLowerCase() as keyof typeof doctor.working_hours;
+    const hours = doctor.working_hours[dayOfWeek];
+    if (hours && hours.open && hours.start && hours.end) {
+      const [startH, startM] = hours.start.split(':').map(Number);
+      const [endH, endM] = hours.end.split(':').map(Number);
+      const totalMins = (endH * 60 + endM) - (startH * 60 + startM);
+      const totalSlots = totalMins / doctor.slot_duration_mins;
+      utilization = totalSlots > 0 ? Math.round((total / totalSlots) * 100) : 0;
+    }
   }
 
-  return { total, waiting, consulting, done, byHour, recent: all.slice(0, 10) };
+  // 5. Flagged Queue (> 30 min wait)
+  const now = Date.now();
+  const flagged = all
+    .filter(a => (a.status === 'booked' || a.status === 'confirmed') && (now - new Date(a.created_at).getTime()) > 30 * 60000)
+    .map(a => ({
+      name: (a as any).patient?.name ?? 'Unknown',
+      waitTime: Math.floor((now - new Date(a.created_at).getTime()) / 60000)
+    }));
+
+  return { 
+    total, waiting, consulting, done, noShows, 
+    avgWaitMins, trend: sortedTrend, utilization, flagged,
+    recent: all.slice(0, 10) 
+  };
+}
+
+export async function getRecentActivity(limit: number = 10) {
+  const clinicId = await getClinicId();
+  const db = getDb();
+
+  const { data } = await db
+    .from('audit_log')
+    .select('*, appointment:appointments(patient:patients(name))')
+    .eq('clinic_id', clinicId)
+    .eq('action', 'status_updated')
+    .order('created_at', { ascending: false })
+    .limit(limit);
+
+  return (data ?? []).map(log => ({
+    id: log.id,
+    patientName: (log as any).appointment?.patient?.name ?? 'Unknown',
+    oldStatus: (log.meta as any)?.oldStatus ?? 'unknown',
+    newStatus: (log.meta as any)?.status ?? 'unknown',
+    timestamp: log.created_at
+  }));
 }
 
 // ─── Doctor settings ──────────────────────────────────────────────────────────
@@ -704,38 +827,6 @@ export async function logCommunicationEvent(
 export async function processVoiceIntake(fd: FormData) {
   const { processPatientVoiceInput } = await import('@/lib/patientExtractionAdapter');
   return processPatientVoiceInput(fd);
-}
-
-export async function saveVisitRecord(
-  appointmentId: string,
-  soap: { subjective: string; objective: string; assessment: string; plan: string },
-  prescriptions: Array<{ drug: string; dose: string; frequency: string; duration: string }>,
-  followUpDate: string
-): Promise<void> {
-  const db = getDb();
-  const { data: appt, error: apptError } = await db
-    .from('appointments')
-    .select('*')
-    .eq('id', appointmentId)
-    .single();
-  if (apptError || !appt) throw new Error('Appointment not found');
-
-  const { error: insertError } = await db.from('visit_history').insert({
-    clinic_id: appt.clinic_id,
-    patient_id: appt.patient_id,
-    appointment_id: appointmentId,
-    summary: JSON.stringify({ soap, prescriptions, followUpDate }),
-    created_at: new Date().toISOString(),
-  });
-  if (insertError) throw new Error(insertError.message);
-
-  const { error: updateError } = await db
-    .from('appointments')
-    .update({ status: 'completed' })
-    .eq('id', appointmentId);
-  if (updateError) throw new Error(updateError.message);
-
-  revalidatePath(`/${appt.clinic_id}/queue`);
 }
 
 export async function raisePatientIssue(
@@ -818,5 +909,97 @@ export async function callNextPatient(): Promise<void> {
   const slug = await getClinicSlug(clinicId);
   revalidatePath(`/${slug}/queue`);
   revalidatePath(`/${slug}/admin`);
+}
+
+export async function getAppointmentDetails(appointmentId: string): Promise<QueueItem | null> {
+  const clinicId = await getClinicId();
+  const { data } = await getDb()
+    .from('appointments')
+    .select('*, patient:patients(*)')
+    .eq('id', appointmentId)
+    .eq('clinic_id', clinicId)
+    .single();
+  return data as QueueItem | null;
+}
+
+export async function generateSoapNote(transcript: string) {
+  const { requestSarvamToolObject } = await import('@/lib/sarvamChatAdapter');
+  
+  const systemPrompt = `You are an AI medical scribe. Convert the following doctor-patient consultation transcript into a structured SOAP note and extract diagnosis and prescription.
+  Return the result using the provided function tool.
+  Subjective: Patient's reported symptoms and history.
+  Objective: Physical findings and vitals mentioned.
+  Assessment: Professional evaluation and differential diagnosis.
+  Plan: Next steps, tests, and follow-up.
+  Diagnosis: Primary suspected condition.
+  Prescription: List of medications with dose and frequency.`;
+
+  const { parsed } = await requestSarvamToolObject<{
+    subjective: string;
+    objective: string;
+    assessment: string;
+    plan: string;
+    diagnosis: string;
+    prescription: Array<{ drug: string; dose: string; frequency: string }>;
+  }>({
+    systemPrompt,
+    userPrompt: transcript,
+    toolName: 'saveSoapNote',
+    toolDescription: 'Saves a structured SOAP note and prescription extracted from transcript',
+    parameters: {
+      type: 'object',
+      properties: {
+        subjective: { type: 'string' },
+        objective: { type: 'string' },
+        assessment: { type: 'string' },
+        plan: { type: 'string' },
+        diagnosis: { type: 'string' },
+        prescription: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              drug: { type: 'string' },
+              dose: { type: 'string' },
+              frequency: { type: 'string' }
+            },
+            required: ['drug', 'dose', 'frequency']
+          }
+        }
+      },
+      required: ['subjective', 'objective', 'assessment', 'plan', 'diagnosis', 'prescription']
+    }
+  });
+
+  return parsed;
+}
+
+export async function saveVisitRecord(
+  appointmentId: string,
+  soap: { subjective: string; objective: string; assessment: string; plan: string },
+  diagnosis: string,
+  prescription: Array<{ drug: string; dose: string; frequency: string }>,
+  followUpDate?: string
+): Promise<void> {
+  // Construct a comprehensive summary for visit_history
+  const summaryParts = [
+    `Diagnosis: ${diagnosis}`,
+    `\nSOAP Note:`,
+    `Subjective: ${soap.subjective}`,
+    `Objective: ${soap.objective}`,
+    `Assessment: ${soap.assessment}`,
+    `Plan: ${soap.plan}`,
+    `\nPrescription:`,
+    ...prescription.map(p => `- ${p.drug}: ${p.dose} (${p.frequency})`),
+  ];
+  
+  if (followUpDate) {
+    summaryParts.push(`\nFollow-up Date: ${followUpDate}`);
+  }
+  
+  const summary = summaryParts.join('\n');
+
+  // updateAppointmentStatus handles visit_history insertion when status is 'completed'
+  await updateAppointmentStatus(appointmentId, 'completed', summary);
 }
 

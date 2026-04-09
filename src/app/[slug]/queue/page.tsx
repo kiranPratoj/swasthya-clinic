@@ -45,7 +45,7 @@ export default async function QueuePage({ params }: { params: Promise<{ slug: st
   ).length;
 
   return (
-    <main style={{ padding: '2rem 1rem 4rem' }}>
+    <main style={{ padding: '2rem 1rem 4rem' }} className="mobile-content-shell">
       <QueueAutoRefresh />
       <div className="max-w-5xl">
         {/* Call Next button */}

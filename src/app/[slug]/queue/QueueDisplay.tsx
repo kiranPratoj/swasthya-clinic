@@ -61,16 +61,17 @@ function getTokenCircleColor(status: AppointmentStatus): string {
   return '#0891b2';
 }
 
-function formatWaitTime(createdAt: string): string {
-  const diff = Math.floor((Date.now() - new Date(createdAt).getTime()) / 60000);
-  if (diff < 1) return 'just now';
-  if (diff === 1) return '1 min ago';
-  return `${diff} min ago`;
-}
-
-function truncateComplaint(complaint: string, maxLen = 40): string {
-  if (complaint.length <= maxLen) return complaint;
-  return complaint.slice(0, maxLen) + '…';
+function getWaitTime(createdAt: string): string {
+  const created = new Date(createdAt);
+  const now = new Date();
+  const diffMs = now.getTime() - created.getTime();
+  const diffMins = Math.floor(diffMs / 60000);
+  
+  if (diffMins < 1) return 'Just now';
+  if (diffMins < 60) return `${diffMins}m`;
+  const hours = Math.floor(diffMins / 60);
+  const mins = diffMins % 60;
+  return `${hours}h ${mins}m`;
 }
 
 function getActionConfig(status: AppointmentStatus): {
@@ -81,9 +82,9 @@ function getActionConfig(status: AppointmentStatus): {
 } {
   if (status === 'in_progress') {
     return {
-      label: 'Mark Done',
-      nextStatus: 'completed',
-      background: '#16a34a',
+      label: 'Consult Now',
+      nextStatus: null,
+      background: '#0891b2',
       disabled: false,
     };
   }
@@ -124,7 +125,13 @@ export default function QueueDisplay({
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [toastQueue, setToastQueue] = useState<Array<{ id: string; token: number; name: string }>>([]);
+  const [now, setNow] = useState(new Date());
   const queueRef = useRef(initialQueue);
+
+  useEffect(() => {
+    const timer = setInterval(() => setNow(new Date()), 60000);
+    return () => clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     setQueue(initialQueue);
@@ -228,11 +235,18 @@ export default function QueueDisplay({
 
   async function handleStatusChange(item: QueueItem) {
     const action = getActionConfig(item.status);
-    if (!action.nextStatus || action.disabled) {
+    if (action.disabled) {
+      return;
+    }
+
+    if (item.status === 'in_progress') {
+      // Navigate to consult
+      window.location.href = `/${slug}/queue/${item.id}/consult`;
       return;
     }
 
     const nextStatus = action.nextStatus;
+    if (!nextStatus) return;
 
     const previousQueue = queue;
     setActionError(null);
@@ -250,6 +264,9 @@ export default function QueueDisplay({
 
     try {
       await updateAppointmentStatus(item.id, nextStatus);
+      if (nextStatus === 'in_progress') {
+        window.location.href = `/${slug}/queue/${item.id}/consult`;
+      }
     } catch (error: unknown) {
       setQueue(previousQueue);
       setActionError(
@@ -334,9 +351,12 @@ export default function QueueDisplay({
             padding: '2rem',
           }}
         >
-          <div style={{ display: 'grid', gap: '0.45rem' }}>
-            <p style={{ fontSize: '1.3rem', fontWeight: 800 }}>Queue is clear for today ✓</p>
-            <p style={{ color: 'var(--color-text-muted)' }}>ಇಂದು ಯಾವ ರೋಗಿಗಳೂ ಇಲ್ಲ</p>
+          <div style={{ display: 'grid', gap: '1.25rem', justifyItems: 'center' }}>
+            <div style={{ fontSize: '3rem' }}>🏥</div>
+            <div style={{ display: 'grid', gap: '0.45rem' }}>
+              <p style={{ fontSize: '1.25rem', fontWeight: 800 }}>No patients today. All clear.</p>
+              <p style={{ color: 'var(--color-text-muted)', fontSize: '1rem' }}>ಇಂದು ಯಾವ ರೋಗಿಗಳೂ ಇಲ್ಲ. ಎಲ್ಲವೂ ಮುಕ್ತಾಯವಾಗಿದೆ.</p>
+            </div>
           </div>
         </div>
       ) : (
@@ -344,6 +364,7 @@ export default function QueueDisplay({
           {sortedQueue.map((item) => {
             const action = getActionConfig(item.status);
             const isPending = pendingId === item.id;
+            const waitTime = getWaitTime(item.created_at);
 
             return (
               <article
@@ -356,20 +377,22 @@ export default function QueueDisplay({
                   padding: '1.25rem',
                   display: 'grid',
                   gap: '1rem',
+                  position: 'relative',
                 }}
               >
                 <div
                   style={{
                     display: 'grid',
-                    gridTemplateColumns: 'auto 1fr',
-                    gap: '1rem',
+                    gridTemplateColumns: 'auto 1fr auto',
+                    gap: '1.25rem',
                     alignItems: 'center',
                   }}
                 >
+                  {/* Token Circle */}
                   <div
                     style={{
-                      width: '4.6rem',
-                      height: '4.6rem',
+                      width: '4.2rem',
+                      height: '4.2rem',
                       borderRadius: '999px',
                       background: getTokenCircleColor(item.status),
                       color: 'white',
@@ -383,36 +406,46 @@ export default function QueueDisplay({
                     {item.token_number}
                   </div>
 
-                  <div style={{ display: 'grid', gap: '0.35rem' }}>
-                    <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
-                      <h2 style={{ fontSize: '1.15rem', fontWeight: 800 }}>
+                  {/* Patient Info - Wrapped in Link for Tapping */}
+                  <Link 
+                    href={`/${slug}/queue/${item.id}/consult`}
+                    style={{ 
+                      display: 'grid', 
+                      gap: '0.35rem', 
+                      textDecoration: 'none', 
+                      color: 'inherit',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                      <h2 style={{ fontSize: '1.2rem', fontWeight: 800 }}>
                         {item.patient.name}
                       </h2>
                       {typeof item.patient.age === 'number' && (
-                        <span style={{ color: 'var(--color-text-muted)', fontWeight: 600 }}>
+                        <span style={{ color: 'var(--color-text-muted)', fontWeight: 600, fontSize: '0.9rem' }}>
                           Age {item.patient.age}
                         </span>
                       )}
                     </div>
 
-                    <p style={{ color: 'var(--color-text-muted)' }}>
-                      {truncateComplaint(item.complaint)}
-                    </p>
+                    <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', fontSize: '0.9rem' }}>
+                      <span style={{ color: 'var(--color-text-muted)', fontWeight: 600 }}>
+                        Wait: <span style={{ color: 'var(--color-primary)' }}>{waitTime}</span>
+                      </span>
+                      <span style={{ color: 'var(--color-border)' }}>|</span>
+                      <p style={{ color: 'var(--color-text-muted)', margin: 0 }}>{item.complaint}</p>
+                    </div>
 
-                    <p style={{ color: 'var(--color-text-muted)', fontSize: '0.8rem' }}>
-                      {formatWaitTime(item.created_at)}
-                    </p>
-
-                    <div style={{ display: 'flex', gap: '0.6rem', flexWrap: 'wrap' }}>
+                    <div style={{ display: 'flex', gap: '0.6rem', flexWrap: 'wrap', marginTop: '0.25rem' }}>
                       <span
                         style={{
                           display: 'inline-flex',
                           alignItems: 'center',
-                          padding: '0.35rem 0.65rem',
+                          padding: '0.3rem 0.6rem',
                           borderRadius: '999px',
                           background: 'var(--color-primary-soft)',
                           color: 'var(--color-primary)',
-                          fontSize: '0.78rem',
+                          fontSize: '0.75rem',
                           fontWeight: 800,
                         }}
                       >
@@ -422,7 +455,7 @@ export default function QueueDisplay({
                         style={{
                           display: 'inline-flex',
                           alignItems: 'center',
-                          padding: '0.35rem 0.65rem',
+                          padding: '0.3rem 0.6rem',
                           borderRadius: '999px',
                           background:
                             item.status === 'in_progress'
@@ -436,7 +469,7 @@ export default function QueueDisplay({
                               : item.status === 'completed'
                                 ? '#166534'
                                 : '#0369a1',
-                          fontSize: '0.78rem',
+                          fontSize: '0.75rem',
                           fontWeight: 800,
                           textTransform: 'capitalize',
                         }}
@@ -444,8 +477,9 @@ export default function QueueDisplay({
                         {formatStatusLabel(item.status)}
                       </span>
                     </div>
-                  </div>
+                  </Link>
 
+                  {/* Desktop Actions */}
                   <div
                     style={{
                       display: 'grid',
@@ -460,49 +494,30 @@ export default function QueueDisplay({
                       style={{
                         border: 'none',
                         borderRadius: 'var(--radius-md)',
-                        padding: '0.9rem 1.15rem',
-                        minWidth: '10.5rem',
+                        padding: '0.8rem 1.25rem',
+                        minWidth: '10rem',
                         background: action.background,
                         color: 'white',
                         fontWeight: 800,
+                        fontSize: '0.95rem',
                         opacity: action.disabled ? 0.8 : 1,
                         boxShadow: 'var(--shadow-sm)',
+                        cursor: action.disabled ? 'not-allowed' : 'pointer',
                       }}
                     >
                       {isPending ? 'Updating...' : action.label}
                     </button>
 
-                    {item.status !== 'completed' && (
-                      <AppointmentActionsMenu
-                        appointmentId={item.id}
-                        currentStatus={item.status}
-                        patientName={item.patient.name}
-                      />
-                    )}
-
-                    <AppointmentActions appointmentId={item.id} />
-
-                    {(item.status === 'in_progress' || item.status === 'confirmed' || item.status === 'booked') && (
-                      <Link
-                        href={`/${slug}/queue/${item.id}/consult`}
-                        style={{
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          border: '2px solid var(--color-primary)',
-                          borderRadius: 'var(--radius-md)',
-                          padding: '0.6rem 1rem',
-                          minWidth: '10.5rem',
-                          background: 'white',
-                          color: 'var(--color-primary)',
-                          fontWeight: 700,
-                          fontSize: '0.9rem',
-                          textDecoration: 'none',
-                        }}
-                      >
-                        AI Scribe
-                      </Link>
-                    )}
+                    <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                      {item.status !== 'completed' && (
+                        <AppointmentActionsMenu
+                          appointmentId={item.id}
+                          currentStatus={item.status}
+                          patientName={item.patient.name}
+                        />
+                      )}
+                      <AppointmentActions appointmentId={item.id} />
+                    </div>
                   </div>
                 </div>
               </article>

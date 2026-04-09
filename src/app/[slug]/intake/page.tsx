@@ -67,7 +67,7 @@ export default async function IntakePage({
   }
 
   return (
-    <main style={{ padding: '2rem 1rem 4rem' }}>
+    <main style={{ padding: '2rem 1rem 4rem' }} className="mobile-content-shell">
       <div className="max-w-3xl" style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
           <span

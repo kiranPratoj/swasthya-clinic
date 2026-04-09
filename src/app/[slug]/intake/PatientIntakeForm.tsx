@@ -102,6 +102,7 @@ export default function PatientIntakeForm({
   const mediaStreamRef = useRef<MediaStream | null>(null);
   const recordedChunksRef = useRef<Blob[]>([]);
   const stageTimersRef = useRef<number[]>([]);
+  const recordingStartTimeRef = useRef<number>(0);
 
   const [patientName, setPatientName] = useState('');
   const [age, setAge] = useState('');
@@ -225,7 +226,7 @@ export default function PatientIntakeForm({
     }
   }
 
-  async function processFullRecording(audioBlob: Blob) {
+  async function processFullRecording(audioBlob: Blob, durationMs: number) {
     startProcessingStageTimers();
     setIsProcessingVoice(true);
     setVoiceError(null);
@@ -236,6 +237,7 @@ export default function PatientIntakeForm({
       type: audioBlob.type || 'audio/webm',
     });
     formData.set('audio', audioFile);
+    formData.set('durationMs', String(durationMs));
 
     try {
       const response = await fetch('/api/intake-voice', {
@@ -317,6 +319,7 @@ export default function PatientIntakeForm({
 
       recorder.onstop = () => {
         stopMediaTracks();
+        const durationMs = Date.now() - recordingStartTimeRef.current;
         const finalBlob = new Blob(recordedChunksRef.current, {
           type: recorder.mimeType || 'audio/webm',
         });
@@ -326,10 +329,11 @@ export default function PatientIntakeForm({
           return;
         }
 
-        void processFullRecording(finalBlob);
+        void processFullRecording(finalBlob, durationMs);
       };
 
       recorder.start(3000);
+      recordingStartTimeRef.current = Date.now();
       setIsRecording(true);
     } catch (error: unknown) {
       stopMediaTracks();
@@ -485,15 +489,20 @@ export default function PatientIntakeForm({
         {mockMode && (
           <div
             style={{
-              background: '#fef9c3',
-              padding: '0.4rem 0.75rem',
-              borderRadius: 6,
-              fontSize: '0.75rem',
-              fontWeight: 700,
-              color: '#a16207',
+              background: 'var(--color-warning-bg)',
+              padding: '0.75rem 1rem',
+              borderRadius: 'var(--radius-md)',
+              fontSize: '0.85rem',
+              fontWeight: 800,
+              color: 'var(--color-warning)',
+              border: '1px solid var(--color-warning)',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.5rem',
             }}
           >
-            [MOCK MODE — voice disabled]
+            <span>⚠️</span>
+            <span>MOCK MODE ACTIVE — Voice extraction is disabled because SARVAM_API_KEY is missing.</span>
           </div>
         )}
 
