@@ -1,132 +1,197 @@
-import { getAdminStats, getRecentActivity } from '@/app/actions';
-import DateNavigator from './DateNavigator';
+import { headers } from 'next/headers';
+import Link from 'next/link';
+import { getDb } from '@/lib/db';
 
-function getRelativeTime(timestamp: string): string {
-  const diff = Date.now() - new Date(timestamp).getTime();
-  const mins = Math.floor(diff / 60000);
-  if (mins < 1) return 'Just now';
-  if (mins < 60) return `${mins}m ago`;
-  const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours}h ago`;
-  return new Date(timestamp).toLocaleDateString();
-}
+export default async function AdminDashboard({ params }: { params: Promise<{ slug: string }> }) {
+  const { slug } = await params;
+  const headerList = await headers();
+  const clinicId = headerList.get('x-clinic-id');
 
-export default async function AdminDashboard({
-  searchParams,
-}: {
-  searchParams: Promise<{ date?: string }>;
-}) {
-  const { date } = await searchParams;
-  const stats = await getAdminStats(date);
-  const activity = await getRecentActivity(10);
+  if (!clinicId) {
+    return <div style={{ padding: '2rem' }}>Clinic ID missing</div>;
+  }
 
-  const selectedDate = date || new Date().toISOString().split('T')[0];
-  const maxTrend = Math.max(...stats.trend.map(t => t.count), 1);
+  const db = getDb();
+  
+  // Use local ISO date format (YYYY-MM-DD) for today
+  const today = new Date().toLocaleDateString('en-CA');
+
+  // Fetch doctor name
+  const { data: doctor } = await db
+    .from('doctors')
+    .select('name')
+    .eq('clinic_id', clinicId)
+    .single();
+
+  const doctorName = doctor?.name || 'Doctor';
+
+  // Fetch today's appointments
+  const { data: todayApptsData } = await db
+    .from('appointments')
+    .select('*, patient:patients(name)')
+    .eq('clinic_id', clinicId)
+    .eq('booked_for', today);
+
+  const todayAppts = todayApptsData || [];
+
+  const totalPatients = todayAppts.length;
+  // Status check based on database enum
+  const waiting = todayAppts.filter(a => ['booked', 'confirmed'].includes(a.status)).length;
+  const consulting = todayAppts.filter(a => a.status === 'in_progress').length;
+  const doneToday = todayAppts.filter(a => a.status === 'completed').length;
+
+  // Patients by hour (9am to 6pm in 1-hour buckets)
+  // X axis: 9am to 6pm (10 buckets: 9, 10, 11, 12, 13, 14, 15, 16, 17, 18)
+  const hourBuckets = new Array(10).fill(0);
+  todayAppts.forEach(appt => {
+    // using created_at to determine hour
+    const dateObj = new Date(appt.created_at);
+    const hour = dateObj.getHours(); // 0 to 23
+    if (hour >= 9 && hour <= 18) {
+      hourBuckets[hour - 9]++;
+    }
+  });
+
+  const maxCount = Math.max(...hourBuckets, 1);
+
+  // Recent 10 appointments
+  const { data: recentApptsData } = await db
+    .from('appointments')
+    .select('*, patient:patients(name)')
+    .eq('clinic_id', clinicId)
+    .order('created_at', { ascending: false })
+    .limit(10);
+
+  const recentAppts = recentApptsData || [];
+
+  const currentHour = new Date().getHours();
+  const greeting = currentHour < 12 ? 'Good morning' : 'Good afternoon';
 
   return (
-    <main style={{ padding: '2rem 1rem 5rem' }}>
-      <div className="max-w-6xl" style={{ display: 'grid', gap: '2rem' }}>
-        <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: '1rem', flexWrap: 'wrap' }}>
-          <div>
-            <h1 style={{ fontSize: '2rem', fontWeight: 800 }}>Clinic Analytics</h1>
-            <p style={{ color: 'var(--color-text-muted)' }}>Real-time performance and queue health.</p>
-          </div>
-          <DateNavigator currentDate={selectedDate} />
-        </header>
-
-        {/* Top KPIs */}
-        <div style={{ 
-          display: 'grid', 
-          gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', 
-          gap: '1rem' 
-        }}>
-          <div className="card" style={{ borderLeft: '4px solid var(--color-primary)' }}>
-            <p style={{ fontSize: '0.75rem', fontWeight: 800, color: 'var(--color-text-muted)', textTransform: 'uppercase' }}>Patients Seen</p>
-            <h2 style={{ fontSize: '2rem', fontWeight: 800 }}>{stats.done}</h2>
-            <p style={{ fontSize: '0.8rem', color: 'var(--color-success)' }}>{Math.round((stats.done / (stats.total || 1)) * 100)}% completion rate</p>
-          </div>
-          <div className="card" style={{ borderLeft: '4px solid var(--color-gold)' }}>
-            <p style={{ fontSize: '0.75rem', fontWeight: 800, color: 'var(--color-text-muted)', textTransform: 'uppercase' }}>Currently Waiting</p>
-            <h2 style={{ fontSize: '2rem', fontWeight: 800 }}>{stats.waiting}</h2>
-            <p style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)' }}>Avg wait: {stats.avgWaitMins} mins</p>
-          </div>
-          <div className="card" style={{ borderLeft: '4px solid #94a3b8' }}>
-            <p style={{ fontSize: '0.75rem', fontWeight: 800, color: 'var(--color-text-muted)', textTransform: 'uppercase' }}>No-Shows</p>
-            <h2 style={{ fontSize: '2rem', fontWeight: 800 }}>{stats.noShows}</h2>
-            <p style={{ fontSize: '0.8rem', color: 'var(--color-error)' }}>{Math.round((stats.noShows / (stats.total || 1)) * 100)}% rate</p>
-          </div>
-          <div className="card" style={{ borderLeft: '4px solid var(--color-accent)' }}>
-            <p style={{ fontSize: '0.75rem', fontWeight: 800, color: 'var(--color-text-muted)', textTransform: 'uppercase' }}>Utilization</p>
-            <h2 style={{ fontSize: '2rem', fontWeight: 800 }}>{stats.utilization}%</h2>
-            <p style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)' }}>Capacity filled</p>
-          </div>
+    <main style={{ padding: '2rem 1rem', maxWidth: '1200px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+      <header style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+        <h1 style={{ fontSize: '2rem', fontWeight: '800', margin: 0, color: 'var(--color-text)' }}>
+          {greeting}, Dr. {doctorName}
+        </h1>
+        
+        {/* Quick Links */}
+        <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
+          <Link href={`/${slug}/intake`} style={{ padding: '0.5rem 1rem', background: 'var(--color-primary)', color: 'white', borderRadius: 'var(--radius-md)', textDecoration: 'none', fontWeight: '600', fontSize: '0.875rem' }}>
+            Reception Intake
+          </Link>
+          <Link href={`/${slug}/queue`} style={{ padding: '0.5rem 1rem', background: 'var(--color-primary)', color: 'white', borderRadius: 'var(--radius-md)', textDecoration: 'none', fontWeight: '600', fontSize: '0.875rem' }}>
+            Doctor Queue
+          </Link>
+          <Link href={`/${slug}/settings`} style={{ padding: '0.5rem 1rem', background: 'white', color: 'var(--color-primary)', border: '1px solid var(--color-primary)', borderRadius: 'var(--radius-md)', textDecoration: 'none', fontWeight: '600', fontSize: '0.875rem' }}>
+            Settings
+          </Link>
         </div>
+      </header>
 
-        {/* Weekly Trend & Flagged Queue */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '2rem' }}>
-          <section className="card">
-            <h3 style={{ fontSize: '1.1rem', fontWeight: 800, marginBottom: '1.5rem' }}>Weekly Appointment Trend</h3>
-            <div style={{ display: 'flex', alignItems: 'flex-end', gap: '0.5rem', height: '150px', padding: '0 0.5rem' }}>
-              {stats.trend.map((t) => (
-                <div key={t.date} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem' }}>
+      {/* Today's stats row */}
+      <section style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem' }}>
+        <div style={{ padding: '1.5rem', background: 'white', borderRadius: 'var(--radius-lg)', border: '1px solid var(--color-border)', boxShadow: 'var(--shadow-sm)' }}>
+          <div style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', marginBottom: '0.5rem', textTransform: 'uppercase', fontWeight: '800' }}>Total patients today</div>
+          <div style={{ fontSize: '2.5rem', fontWeight: '800', color: 'var(--color-primary)' }}>{totalPatients}</div>
+        </div>
+        <div style={{ padding: '1.5rem', background: 'white', borderRadius: 'var(--radius-lg)', border: '1px solid var(--color-border)', boxShadow: 'var(--shadow-sm)' }}>
+          <div style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', marginBottom: '0.5rem', textTransform: 'uppercase', fontWeight: '800' }}>Currently waiting</div>
+          <div style={{ fontSize: '2.5rem', fontWeight: '800', color: 'var(--color-gold)' }}>{waiting}</div>
+        </div>
+        <div style={{ padding: '1.5rem', background: 'white', borderRadius: 'var(--radius-lg)', border: '1px solid var(--color-border)', boxShadow: 'var(--shadow-sm)' }}>
+          <div style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', marginBottom: '0.5rem', textTransform: 'uppercase', fontWeight: '800' }}>Currently consulting</div>
+          <div style={{ fontSize: '2.5rem', fontWeight: '800', color: 'var(--color-accent)' }}>{consulting}</div>
+        </div>
+        <div style={{ padding: '1.5rem', background: 'white', borderRadius: 'var(--radius-lg)', border: '1px solid var(--color-border)', boxShadow: 'var(--shadow-sm)' }}>
+          <div style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', marginBottom: '0.5rem', textTransform: 'uppercase', fontWeight: '800' }}>Done today</div>
+          <div style={{ fontSize: '2.5rem', fontWeight: '800', color: 'var(--color-success)' }}>{doneToday}</div>
+        </div>
+      </section>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '2rem' }}>
+        {/* Patients by hour bar chart */}
+        <section style={{ padding: '1.5rem', background: 'white', borderRadius: 'var(--radius-lg)', border: '1px solid var(--color-border)', boxShadow: 'var(--shadow-sm)' }}>
+          <h2 style={{ fontSize: '1.25rem', fontWeight: '800', marginBottom: '2rem', color: 'var(--color-text)' }}>Patients by Hour</h2>
+          <div style={{ display: 'flex', alignItems: 'flex-end', gap: '0.5rem', height: '100px', position: 'relative' }}>
+            {hourBuckets.map((count, i) => {
+              const height = (count / maxCount) * 80;
+              const hour = i + 9;
+              const hourLabel = hour > 12 ? `${hour - 12}pm` : (hour === 12 ? '12pm' : `${hour}am`);
+              return (
+                <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end', height: '100px' }}>
                   <div style={{ 
                     width: '100%', 
-                    height: `${(t.count / maxTrend) * 100}%`, 
+                    height: `${height}px`, 
                     background: 'var(--color-primary)', 
-                    borderRadius: '4px 4px 0 0',
-                    minHeight: t.count > 0 ? '4px' : '0'
-                  }} title={`${t.count} appointments`} />
-                  <span style={{ fontSize: '0.65rem', fontWeight: 700, color: 'var(--color-text-muted)', transform: 'rotate(-45deg)', marginTop: '0.5rem' }}>
-                    {new Date(t.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </section>
-
-          {stats.flagged.length > 0 && (
-            <section className="card" style={{ background: 'var(--color-error-bg)', border: '1px solid #fca5a5' }}>
-              <h3 style={{ fontSize: '1.1rem', fontWeight: 800, marginBottom: '1rem', color: 'var(--color-error)' }}>⚠️ Flagged Queue</h3>
-              <p style={{ fontSize: '0.85rem', color: '#991b1b', marginBottom: '1rem' }}>Patients waiting over 30 minutes:</p>
-              <div style={{ display: 'grid', gap: '0.75rem' }}>
-                {stats.flagged.map((f, i) => (
-                  <div key={i} style={{ background: 'white', padding: '0.75rem', borderRadius: 'var(--radius-md)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ fontWeight: 700 }}>{f.name}</span>
-                    <span style={{ color: 'var(--color-error)', fontWeight: 800, fontSize: '0.9rem' }}>{f.waitTime}m wait</span>
+                    borderRadius: '4px 4px 0 0', 
+                    minHeight: count > 0 ? '4px' : '0' 
+                  }} title={`${count} patients at ${hourLabel}`}></div>
+                  <div style={{ fontSize: '0.65rem', fontWeight: '700', color: 'var(--color-text-muted)', marginTop: '0.5rem' }}>
+                    {hourLabel}
                   </div>
-                ))}
-              </div>
-            </section>
-          )}
-        </div>
-
-        {/* Recent Activity */}
-        <section className="card">
-          <h3 style={{ fontSize: '1.1rem', fontWeight: 800, marginBottom: '1.25rem' }}>Recent Activity Feed</h3>
-          <div style={{ display: 'grid', gap: '0.1rem' }}>
-            {activity.map((a) => (
-              <div key={a.id} style={{ 
-                padding: '0.8rem 0', 
-                borderBottom: '1px solid var(--color-bg)',
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                gap: '1rem'
-              }}>
-                <div>
-                  <strong style={{ fontSize: '0.95rem' }}>{a.patientName}</strong>
-                  <p style={{ fontSize: '0.85rem', color: 'var(--color-text-muted)' }}>
-                    Status flipped: <span style={{ textTransform: 'capitalize' }}>{a.oldStatus.replace('_', ' ')}</span> → <span style={{ color: 'var(--color-primary)', fontWeight: 700, textTransform: 'capitalize' }}>{a.newStatus.replace('_', ' ')}</span>
-                  </p>
                 </div>
-                <span style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', whiteSpace: 'nowrap' }}>
-                  {getRelativeTime(a.timestamp)}
-                </span>
-              </div>
-            ))}
-            {activity.length === 0 && (
-              <p style={{ textAlign: 'center', padding: '2rem', color: 'var(--color-text-muted)' }}>No recent activity.</p>
-            )}
+              );
+            })}
+          </div>
+        </section>
+
+        {/* Recent 10 appointments table */}
+        <section style={{ padding: '1.5rem', background: 'white', borderRadius: 'var(--radius-lg)', border: '1px solid var(--color-border)', boxShadow: 'var(--shadow-sm)', overflow: 'hidden' }}>
+          <h2 style={{ fontSize: '1.25rem', fontWeight: '800', marginBottom: '1.5rem', color: 'var(--color-text)' }}>Recent 10 Appointments</h2>
+          <div style={{ overflowX: 'auto', margin: '-1.5rem', padding: '1.5rem' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.875rem' }}>
+              <thead>
+                <tr style={{ borderBottom: '1px solid var(--color-border)', color: 'var(--color-text-muted)' }}>
+                  <th style={{ padding: '0.75rem', fontWeight: '700' }}>Token</th>
+                  <th style={{ padding: '0.75rem', fontWeight: '700' }}>Patient</th>
+                  <th style={{ padding: '0.75rem', fontWeight: '700' }}>Complaint</th>
+                  <th style={{ padding: '0.75rem', fontWeight: '700' }}>Status</th>
+                  <th style={{ padding: '0.75rem', fontWeight: '700' }}>Time</th>
+                </tr>
+              </thead>
+              <tbody>
+                {recentAppts.map((appt) => {
+                  let statusBg = 'var(--color-bg)';
+                  let statusColor = 'var(--color-text)';
+                  if (appt.status === 'completed') { statusBg = 'var(--color-success)'; statusColor = 'white'; }
+                  if (['booked', 'confirmed'].includes(appt.status)) { statusBg = 'var(--color-gold-light)'; statusColor = 'var(--color-warning)'; }
+                  if (appt.status === 'in_progress') { statusBg = 'var(--color-primary)'; statusColor = 'white'; }
+                  if (['cancelled', 'no_show'].includes(appt.status)) { statusBg = 'var(--color-error-bg)'; statusColor = 'var(--color-error)'; }
+
+                  return (
+                    <tr key={appt.id} style={{ borderBottom: '1px solid var(--color-bg)' }}>
+                      <td style={{ padding: '0.75rem', fontWeight: '800', color: 'var(--color-text)' }}>#{appt.token_number}</td>
+                      <td style={{ padding: '0.75rem', fontWeight: '500' }}>{appt.patient?.name || 'Unknown'}</td>
+                      <td style={{ padding: '0.75rem', color: 'var(--color-text-muted)' }}>{appt.complaint}</td>
+                      <td style={{ padding: '0.75rem' }}>
+                        <span style={{ 
+                          padding: '0.25rem 0.5rem', 
+                          borderRadius: 'var(--radius-sm)', 
+                          fontSize: '0.75rem',
+                          fontWeight: '700',
+                          background: statusBg,
+                          color: statusColor,
+                          textTransform: 'capitalize',
+                          whiteSpace: 'nowrap'
+                        }}>
+                          {appt.status.replace('_', ' ')}
+                        </span>
+                      </td>
+                      <td style={{ padding: '0.75rem', color: 'var(--color-text-muted)', whiteSpace: 'nowrap' }}>
+                        {new Date(appt.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </td>
+                    </tr>
+                  );
+                })}
+                {recentAppts.length === 0 && (
+                  <tr>
+                    <td colSpan={5} style={{ padding: '2rem 1rem', textAlign: 'center', color: 'var(--color-text-muted)', fontWeight: '500' }}>
+                      No recent appointments found.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
           </div>
         </section>
       </div>
