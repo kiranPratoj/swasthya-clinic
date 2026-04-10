@@ -109,12 +109,12 @@ export default function StaffBottomNav({ slug, doctorName }: Props) {
           right: 0,
           background: '#ffffff',
           borderRadius: '16px 16px 0 0',
-          boxShadow: '0 -4px 24px rgba(0,0,0,0.15)',
+          boxShadow: '0 -18px 36px rgba(3, 78, 162, 0.16)',
           zIndex: 91,
           padding: '1rem',
         }}>
-          <div style={{ width: 36, height: 4, background: '#e2e8f0', borderRadius: 2, margin: '0 auto 1rem' }} />
-          <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '0.75rem', paddingLeft: '0.25rem' }}>
+          <div style={{ width: 36, height: 4, background: 'var(--color-primary-outline)', borderRadius: 2, margin: '0 auto 1rem' }} />
+          <div style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '0.75rem', paddingLeft: '0.25rem' }}>
             Dr. {doctorName}
           </div>
           {MORE_ITEMS.map(item => (
@@ -128,7 +128,7 @@ export default function StaffBottomNav({ slug, doctorName }: Props) {
                 fontSize: '0.9375rem',
                 fontWeight: 600,
                 color: pathname.startsWith(item.href(slug)) ? 'var(--color-primary)' : 'var(--color-text)',
-                borderBottom: '1px solid #f1f5f9',
+                borderBottom: '1px solid var(--color-primary-outline)',
                 textDecoration: 'none',
               }}
             >
@@ -141,9 +141,9 @@ export default function StaffBottomNav({ slug, doctorName }: Props) {
               padding: '0.75rem',
               fontSize: '0.875rem',
               fontWeight: 600,
-              color: '#ef4444',
-              background: '#fef2f2',
-              border: '1px solid #fecaca',
+              color: 'var(--color-error)',
+              background: 'var(--color-error-bg)',
+              border: '1px solid rgba(237, 28, 36, 0.18)',
               borderRadius: '8px',
               cursor: 'pointer',
               marginTop: '0.25rem',
@@ -163,8 +163,8 @@ export default function StaffBottomNav({ slug, doctorName }: Props) {
         height: 'calc(64px + env(safe-area-inset-bottom))',
         paddingBottom: 'env(safe-area-inset-bottom)',
         background: '#ffffff',
-        borderTop: '1px solid #bae6fd',
-        boxShadow: '0 -2px 12px rgba(8, 145, 178, 0.08)',
+        borderTop: '1px solid rgba(3, 78, 162, 0.12)',
+        boxShadow: '0 -10px 24px rgba(3, 78, 162, 0.08)',
         display: 'flex',
         alignItems: 'stretch',
         zIndex: 80,
@@ -188,7 +188,7 @@ export default function StaffBottomNav({ slug, doctorName }: Props) {
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    boxShadow: '0 4px 16px rgba(8, 145, 178, 0.35)',
+                    boxShadow: '0 12px 28px rgba(3, 78, 162, 0.28)',
                     marginBottom: 8,
                     textDecoration: 'none',
                   }}
@@ -213,7 +213,7 @@ export default function StaffBottomNav({ slug, doctorName }: Props) {
                   gap: 3,
                   background: 'none',
                   border: 'none',
-                  color: isActive || moreOpen ? 'var(--color-primary)' : '#94a3b8',
+                  color: isActive || moreOpen ? 'var(--color-primary)' : 'var(--color-text-muted)',
                   cursor: 'pointer',
                   padding: '0 0.25rem',
                   paddingBottom: 0,
@@ -238,7 +238,7 @@ export default function StaffBottomNav({ slug, doctorName }: Props) {
                 alignItems: 'center',
                 justifyContent: 'center',
                 gap: 3,
-                color: isActive ? 'var(--color-primary)' : '#94a3b8',
+                color: isActive ? 'var(--color-primary)' : 'var(--color-text-muted)',
                 textDecoration: 'none',
                 padding: '0 0.25rem',
                 paddingBottom: 0,

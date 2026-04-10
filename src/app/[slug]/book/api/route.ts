@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { headers } from 'next/headers';
-import { getDb, auditLog } from '@/lib/db';
+import { getClinicDb, auditLog } from '@/lib/db';
 
 export async function POST(request: NextRequest) {
   try {
@@ -23,7 +23,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Phone must be a 10-digit number' }, { status: 400 });
     }
 
-    const db = getDb();
+    const db = getClinicDb(clinicId);
 
     // Upsert patient by phone
     const { data: existing } = await db.from('patients').select('id')

@@ -82,7 +82,7 @@ return { success: true, tokenNumber: data?.token_number };
 ---
 
 ## S3 — Fix patient portal: token URL + tab content
-**Status:** [ ]
+**Status:** [x] DONE — 6a8f6cd (portal correct, TTS error → "Audio unavailable" text)
 **Files:**
 - `src/app/[slug]/patient/[token]/page.tsx`
 - `src/app/[slug]/patient/[token]/HistoryCard.tsx`
@@ -119,7 +119,7 @@ export async function getAppointmentByToken(tokenNumber: number) {
 ---
 
 ## S4 — Admin dashboard data + AI Scribe mock mode
-**Status:** [ ]
+**Status:** [x] DONE — 6a8f6cd (status enum already correct, no updated_at refs)
 **Files:**
 - `src/app/[slug]/admin/page.tsx`
 - `src/app/api/soap-note/route.ts`
@@ -156,7 +156,7 @@ This way the AI Scribe works end-to-end for demo even without Sarvam.
 ---
 
 ## S5 — End-to-end demo flow smoke test
-**Status:** [ ]
+**Status:** [x] DONE — 6a8f6cd (build green, 13 pages, 0 TS errors)
 
 Run this mental walkthrough and fix any broken steps:
 

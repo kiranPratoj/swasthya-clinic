@@ -120,6 +120,10 @@ export default function PatientIntakeForm({
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [confirmedToken, setConfirmedToken] = useState<number | null>(null);
 
+  const [isParsingReceipt, setIsParsingReceipt] = useState(false);
+  const [receiptUtr, setReceiptUtr] = useState('');
+  const [receiptAmount, setReceiptAmount] = useState('');
+
   const bookedFor = getTodayIsoDate();
   const missingFields = voiceDraft?.structuredData.missingFields ?? [];
 
@@ -387,6 +391,37 @@ export default function PatientIntakeForm({
   }, []);
 
   const activeProcessingStep = PROCESSING_STEPS[processingStep];
+
+  const handleReceiptUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    setIsParsingReceipt(true);
+    setSubmitError(null);
+
+    const formData = new FormData();
+    formData.append('image', file);
+
+    try {
+      const response = await fetch('/api/parse-receipt', {
+        method: 'POST',
+        body: formData,
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to parse receipt.');
+      }
+
+      if (data.utr_number) setReceiptUtr(data.utr_number);
+      if (data.amount) setReceiptAmount(data.amount.toString());
+    } catch (error: unknown) {
+      setSubmitError(getErrorMessage(error));
+    } finally {
+      setIsParsingReceipt(false);
+    }
+  };
 
   function resetForm() {
     setPatientName('');
@@ -836,6 +871,27 @@ export default function PatientIntakeForm({
             placeholder="Describe the chief complaint"
             style={{ resize: 'vertical' }}
           />
+        </div>
+
+        <div style={{ padding: '1.25rem', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-lg)', background: 'var(--color-bg-soft)', display: 'grid', gap: '1rem' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <h3 style={{ fontSize: '1.1rem', fontWeight: 800 }}>Payment Details</h3>
+            <label style={{ cursor: 'pointer', padding: '0.5rem 1rem', background: 'var(--color-primary-soft)', color: 'var(--color-primary)', borderRadius: 'var(--radius-md)', fontWeight: 700, fontSize: '0.85rem' }}>
+              {isParsingReceipt ? 'Scanning...' : '📷 Scan UPI Receipt'}
+              <input type="file" accept="image/*" capture="environment" onChange={handleReceiptUpload} style={{ display: 'none' }} disabled={isParsingReceipt} />
+            </label>
+          </div>
+          
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+            <div>
+              <label htmlFor="payment_utr">UTR Number</label>
+              <input id="payment_utr" name="payment_utr" type="text" value={receiptUtr} onChange={(e) => setReceiptUtr(e.target.value)} placeholder="e.g. 412345678901" />
+            </div>
+            <div>
+              <label htmlFor="payment_amount">Amount (₹)</label>
+              <input id="payment_amount" name="payment_amount" type="number" min="0" step="0.01" value={receiptAmount} onChange={(e) => setReceiptAmount(e.target.value)} placeholder="e.g. 500.00" />
+            </div>
+          </div>
         </div>
 
         <input type="hidden" name="doctorId" value={doctorId} />

@@ -26,15 +26,15 @@ function statusColor(status: string): { bg: string; fg: string } {
   switch (status) {
     case 'confirmed':
     case 'booked':
-      return { bg: '#eff6ff', fg: '#2563eb' };
+      return { bg: 'var(--color-primary-soft)', fg: 'var(--color-primary)' };
     case 'in_progress':
-      return { bg: '#f0fdf4', fg: '#16a34a' };
+      return { bg: 'var(--color-warning-bg)', fg: 'var(--color-warning)' };
     case 'completed':
-      return { bg: '#f1f5f9', fg: '#64748b' };
+      return { bg: 'var(--color-success-bg)', fg: 'var(--color-success)' };
     case 'cancelled':
-      return { bg: '#fef2f2', fg: '#dc2626' };
+      return { bg: 'var(--color-error-bg)', fg: 'var(--color-error)' };
     default:
-      return { bg: '#f8fafc', fg: '#475569' };
+      return { bg: 'var(--color-bg-soft)', fg: 'var(--color-text-muted)' };
   }
 }
 

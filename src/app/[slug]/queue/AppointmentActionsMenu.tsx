@@ -121,9 +121,9 @@ export default function AppointmentActionsMenu({
           {mode === 'idle' && (
             <>
               {[
-                { label: 'Cancel appointment', color: '#dc2626', bg: '#fef2f2', onClick: () => setMode('cancel') },
-                { label: 'Mark as no-show',    color: '#b45309', bg: '#fffbeb', onClick: () => void runAction(() => markNoShow(appointmentId)) },
-                { label: 'Reschedule',         color: '#0369a1', bg: '#f0f9ff', onClick: () => setMode('reschedule') },
+                { label: 'Cancel appointment', color: 'var(--color-error)', bg: 'var(--color-error-bg)', onClick: () => setMode('cancel') },
+                { label: 'Mark as no-show',    color: 'var(--color-warning)', bg: 'var(--color-warning-bg)', onClick: () => void runAction(() => markNoShow(appointmentId)) },
+                { label: 'Reschedule',         color: 'var(--color-primary)', bg: 'var(--color-primary-soft)', onClick: () => setMode('reschedule') },
               ].map(({ label, color, bg, onClick }) => (
                 <button
                   key={label}

@@ -39,7 +39,7 @@ async function run() {
       name: 'Dr. Priya Sharma',
       speciality: 'General Medicine',
       phone: '+91 98456 12345',
-      working_hours: { mon:{open:true,start:'09:00',end:'13:00'}, tue:{open:true,start:'09:00',end:'13:00'}, wed:{open:true,start:'09:00',end:'13:00'}, thu:{open:true,start:'09:00',end:'13:00'}, fri:{open:true,start:'09:00',end:'13:00'}, sat:{open:true,start:'09:00',end:'12:00'}, sun:{open:false,start:'09:00',end:'12:00'} },
+      working_hours: { mon:{open:true,slots:[{start:'09:00',end:'13:00'}]}, tue:{open:true,slots:[{start:'09:00',end:'13:00'}]}, wed:{open:true,slots:[{start:'09:00',end:'13:00'}]}, thu:{open:true,slots:[{start:'09:00',end:'13:00'}]}, fri:{open:true,slots:[{start:'09:00',end:'13:00'}]}, sat:{open:true,slots:[{start:'09:00',end:'12:00'}]}, sun:{open:false,slots:[{start:'09:00',end:'12:00'}]} },
       slot_duration_mins: 15,
     }).select('id').single();
     if (dErr) throw new Error('Doctor: ' + dErr.message);

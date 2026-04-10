@@ -51,14 +51,14 @@ function isAppointmentStatus(value: unknown): value is AppointmentStatus {
 
 function getTokenCircleColor(status: AppointmentStatus): string {
   if (status === 'in_progress') {
-    return '#f59e0b';
+    return 'var(--color-gold)';
   }
 
   if (status === 'completed') {
-    return '#16a34a';
+    return 'var(--color-success)';
   }
 
-  return '#0891b2';
+  return 'var(--color-primary)';
 }
 
 function getWaitTime(createdAt: string): string {
@@ -84,7 +84,7 @@ function getActionConfig(status: AppointmentStatus): {
     return {
       label: 'Consult Now',
       nextStatus: null,
-      background: '#0891b2',
+      background: 'var(--color-primary)',
       disabled: false,
     };
   }
@@ -93,7 +93,7 @@ function getActionConfig(status: AppointmentStatus): {
     return {
       label: 'Done ✓',
       nextStatus: null,
-      background: '#94a3b8',
+      background: 'var(--color-disabled)',
       disabled: true,
     };
   }
@@ -102,7 +102,7 @@ function getActionConfig(status: AppointmentStatus): {
     return {
       label: 'Status Locked',
       nextStatus: null,
-      background: '#94a3b8',
+      background: 'var(--color-disabled)',
       disabled: true,
     };
   }
@@ -110,7 +110,7 @@ function getActionConfig(status: AppointmentStatus): {
   return {
     label: 'Start Consulting',
     nextStatus: 'in_progress',
-    background: '#0891b2',
+    background: 'var(--color-primary)',
     disabled: false,
   };
 }
@@ -125,13 +125,7 @@ export default function QueueDisplay({
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [toastQueue, setToastQueue] = useState<Array<{ id: string; token: number; name: string }>>([]);
-  const [now, setNow] = useState(new Date());
   const queueRef = useRef(initialQueue);
-
-  useEffect(() => {
-    const timer = setInterval(() => setNow(new Date()), 60000);
-    return () => clearInterval(timer);
-  }, []);
 
   useEffect(() => {
     setQueue(initialQueue);
@@ -459,16 +453,16 @@ export default function QueueDisplay({
                           borderRadius: '999px',
                           background:
                             item.status === 'in_progress'
-                              ? '#fef3c7'
+                              ? 'var(--color-warning-bg)'
                               : item.status === 'completed'
-                                ? '#dcfce7'
-                                : '#e0f2fe',
+                                ? 'var(--color-success-bg)'
+                                : 'var(--color-primary-soft)',
                           color:
                             item.status === 'in_progress'
-                              ? '#b45309'
+                              ? 'var(--color-warning)'
                               : item.status === 'completed'
-                                ? '#166534'
-                                : '#0369a1',
+                                ? 'var(--color-success)'
+                                : 'var(--color-primary)',
                           fontSize: '0.75rem',
                           fontWeight: 800,
                           textTransform: 'capitalize',

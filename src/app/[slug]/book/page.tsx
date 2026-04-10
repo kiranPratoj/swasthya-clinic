@@ -1,5 +1,5 @@
 import { headers } from 'next/headers';
-import { getDb } from '@/lib/db';
+import { getClinicDb, getDb } from '@/lib/db';
 import BookingForm from './BookingForm';
 
 export default async function PatientBookingPage({
@@ -22,9 +22,10 @@ export default async function PatientBookingPage({
     );
   }
 
+  const clinicDb = getClinicDb(clinicId);
   const [{ data: clinic }, { data: doctor }] = await Promise.all([
     getDb().from('clinics').select('name, phone, speciality').eq('id', clinicId).single(),
-    getDb().from('doctors').select('id, name, speciality').eq('clinic_id', clinicId).limit(1).single(),
+    clinicDb.from('doctors').select('id, name, speciality').limit(1).single(),
   ]);
 
   if (!doctor) {

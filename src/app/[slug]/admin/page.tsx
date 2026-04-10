@@ -1,9 +1,11 @@
 import { headers } from 'next/headers';
 import Link from 'next/link';
-import { getDb } from '@/lib/db';
+import { getClinicDb } from '@/lib/db';
+import { verifyRole } from '@/lib/auth';
 
 export default async function AdminDashboard({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
+  await verifyRole(['admin', 'doctor'], slug);
   const headerList = await headers();
   const clinicId = headerList.get('x-clinic-id');
 
@@ -11,7 +13,7 @@ export default async function AdminDashboard({ params }: { params: Promise<{ slu
     return <div style={{ padding: '2rem' }}>Clinic ID missing</div>;
   }
 
-  const db = getDb();
+  const db = getClinicDb(clinicId);
   
   // Use local ISO date format (YYYY-MM-DD) for today
   const today = new Date().toLocaleDateString('en-CA');

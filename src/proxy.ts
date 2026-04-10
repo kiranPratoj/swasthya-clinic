@@ -94,17 +94,29 @@ export async function proxy(request: NextRequest) {
       return new NextResponse('Access denied', { status: 403 });
     }
 
-    const response = NextResponse.next();
-    response.headers.set('x-clinic-id', clinicId);
-    response.headers.set('x-user-id', session.userId);
-    response.headers.set('x-user-role', session.role);
-    return response;
+    const requestHeaders = new Headers(request.headers);
+    requestHeaders.set('x-clinic-id', clinicId);
+    requestHeaders.set('x-user-id', session.userId);
+    requestHeaders.set('x-user-role', session.role);
+
+    return NextResponse.next({
+      request: {
+        headers: requestHeaders,
+      },
+    });
   }
 
   // Public slug route (e.g. /book) — inject clinic but no auth needed
-  const response = NextResponse.next();
-  response.headers.set('x-clinic-id', clinicId);
-  return response;
+  const requestHeaders = new Headers(request.headers);
+  requestHeaders.delete('x-user-id');
+  requestHeaders.delete('x-user-role');
+  requestHeaders.set('x-clinic-id', clinicId);
+
+  return NextResponse.next({
+    request: {
+      headers: requestHeaders,
+    },
+  });
 }
 
 export const config = {

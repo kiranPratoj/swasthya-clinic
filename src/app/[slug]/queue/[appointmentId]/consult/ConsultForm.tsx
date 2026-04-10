@@ -241,14 +241,33 @@ export default function ConsultForm({ appointment, slug }: Props) {
             <button 
               onClick={() => router.push(`/${slug}/queue`)}
               style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.5rem',
                 padding: '0.8rem 1.5rem',
                 background: 'white',
-                color: 'var(--color-text)',
+                color: 'var(--color-primary)',
                 border: '1px solid var(--color-border)',
                 borderRadius: 'var(--radius-md)',
-                fontWeight: 700
+                fontWeight: 700,
+                fontSize: '0.9rem',
+                boxShadow: 'var(--shadow-sm)',
+                cursor: 'pointer',
+                transition: 'all 0.2s ease',
               }}
             >
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M19 12H5M12 19l-7-7 7-7" />
+              </svg>
               Back to Queue
             </button>
           </div>

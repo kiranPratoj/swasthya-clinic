@@ -1,5 +1,5 @@
 import { headers } from 'next/headers';
-import { getDb } from '@/lib/db';
+import { getClinicDb } from '@/lib/db';
 import Link from 'next/link';
 import type { Clinic, Doctor } from '@/lib/types';
 import StaffBottomNav from '@/components/StaffBottomNav';
@@ -9,7 +9,7 @@ async function getClinicContext(): Promise<{ clinic: Clinic; doctor: Doctor | nu
   const clinicId = h.get('x-clinic-id');
   if (!clinicId) return null;
 
-  const db = getDb();
+  const db = getClinicDb(clinicId);
   const [{ data: clinic }, { data: doctor }] = await Promise.all([
     db.from('clinics').select('*').eq('id', clinicId).single(),
     db.from('doctors').select('*').eq('clinic_id', clinicId).single(),
@@ -17,13 +17,6 @@ async function getClinicContext(): Promise<{ clinic: Clinic; doctor: Doctor | nu
 
   if (!clinic) return null;
   return { clinic: clinic as Clinic, doctor: doctor as Doctor | null };
-}
-
-// Routes that are patient-facing — no staff nav
-const PATIENT_ROUTES = ['/book', '/patient/'];
-
-function isPatientRoute(slug: string, pathname: string): boolean {
-  return PATIENT_ROUTES.some(r => pathname.includes(`/${slug}${r}`));
 }
 
 export default async function SlugLayout({
@@ -41,21 +34,26 @@ export default async function SlugLayout({
 
   return (
     <div>
-      {/* Desktop sub-nav — hidden on mobile via .staff-sub-nav-desktop */}
       <div className="staff-sub-nav-desktop" style={{
-        background: '#f0f9ff',
-        borderBottom: '1px solid #bae6fd',
-        padding: '0.5rem 0',
-        fontSize: '0.8rem',
+        background: 'linear-gradient(180deg, var(--color-bg) 0%, white 100%)',
+        borderBottom: '1px solid rgba(3, 78, 162, 0.12)',
+        padding: '0.9rem 0 1rem',
+        fontSize: '0.84rem',
       }}>
-        <div className="max-w-7xl px-4" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
-          <span style={{ fontWeight: 600, color: '#0369a1' }}>
-            {clinicName}
+        <div className="max-w-7xl px-4" style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto auto', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontSize: '0.7rem', fontWeight: 800, color: 'var(--color-primary)', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '0.2rem' }}>
+              Clinic Console
+            </div>
+            <span style={{ fontWeight: 800, color: 'var(--color-text)', fontSize: '1.05rem' }}>
+              {clinicName}
+            </span>
             {ctx?.clinic.speciality && (
-              <span style={{ fontWeight: 400, color: '#0891b2', marginLeft: '0.5rem' }}>· {ctx.clinic.speciality}</span>
+              <span style={{ fontWeight: 600, color: 'var(--color-text-muted)', marginLeft: '0.65rem' }}>· {ctx.clinic.speciality}</span>
             )}
-          </span>
-          <nav className="slug-sub-nav" style={{ display: 'flex', gap: '0.25rem' }}>
+          </div>
+
+          <nav className="slug-sub-nav" style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', justifyContent: 'center' }}>
             {[
               { href: `/${slug}/intake`, label: 'Intake' },
               { href: `/${slug}/queue`, label: 'Queue' },
@@ -65,25 +63,36 @@ export default async function SlugLayout({
               { href: `/${slug}/settings`, label: 'Settings' },
             ].map(({ href, label }) => (
               <Link key={href} href={href} style={{
-                padding: '0.25rem 0.625rem',
-                fontSize: '0.75rem',
-                fontWeight: 600,
-                color: '#0369a1',
-                borderRadius: '4px',
-                border: '1px solid transparent',
+                padding: '0.55rem 0.8rem',
+                fontSize: '0.8rem',
+                fontWeight: 700,
+                color: 'var(--color-primary)',
+                borderRadius: '999px',
+                border: '1px solid var(--color-primary-outline)',
+                background: 'white',
+                boxShadow: 'var(--shadow-sm)',
                 textDecoration: 'none',
+                whiteSpace: 'nowrap',
               }}>
                 {label}
               </Link>
             ))}
           </nav>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-            <span style={{ color: '#0891b2', fontSize: '0.75rem' }}>Dr. {doctorName}</span>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+            <span style={{ color: 'var(--color-primary)', fontSize: '0.8rem', fontWeight: 700, padding: '0.45rem 0.7rem', background: 'var(--color-primary-soft)', borderRadius: '999px', whiteSpace: 'nowrap' }}>
+              Dr. {doctorName}
+            </span>
             <form action="/api/auth/logout" method="POST">
               <button type="submit" style={{
-                fontSize: '0.7rem', fontWeight: 600, color: '#64748b',
-                background: 'none', border: '1px solid #cbd5e1',
-                borderRadius: '4px', padding: '0.2rem 0.55rem', cursor: 'pointer',
+                fontSize: '0.76rem',
+                fontWeight: 700,
+                color: 'var(--color-error)',
+                background: 'rgba(237, 28, 36, 0.06)',
+                border: '1px solid rgba(237, 28, 36, 0.16)',
+                borderRadius: '999px',
+                padding: '0.45rem 0.8rem',
+                cursor: 'pointer',
               }}>
                 Sign out
               </button>

@@ -44,7 +44,37 @@ export default async function PatientProfilePage({
 
   return (
     <div style={{ display: 'grid', gap: '1.5rem', paddingBottom: '4rem' }}>
-      <Link href={`/${slug}/patients`} style={{ width: 'fit-content' }}>
+      <Link
+        href={`/${slug}/patients`}
+        style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: '0.5rem',
+          padding: '0.6rem 1rem',
+          borderRadius: 'var(--radius-md)',
+          background: 'white',
+          border: '1px solid var(--color-border)',
+          color: 'var(--color-primary)',
+          fontWeight: 700,
+          fontSize: '0.875rem',
+          textDecoration: 'none',
+          boxShadow: 'var(--shadow-sm)',
+          width: 'fit-content',
+          transition: 'all 0.2s ease',
+        }}
+      >
+        <svg
+          width="16"
+          height="16"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2.5"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <path d="M19 12H5M12 19l-7-7 7-7" />
+        </svg>
         Back to Patients
       </Link>
 

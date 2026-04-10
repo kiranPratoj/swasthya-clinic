@@ -40,28 +40,28 @@ function formatVisitType(value: Appointment['visit_type']): string {
 function getStatusColors(status: AppointmentStatus): { background: string; color: string } {
   if (status === 'in_progress') {
     return {
-      background: '#fef3c7',
-      color: '#b45309',
+      background: 'var(--color-warning-bg)',
+      color: 'var(--color-warning)',
     };
   }
 
   if (status === 'completed') {
     return {
-      background: '#dcfce7',
-      color: '#166534',
+      background: 'var(--color-success-bg)',
+      color: 'var(--color-success)',
     };
   }
 
   if (status === 'cancelled' || status === 'no_show') {
     return {
-      background: '#fee2e2',
-      color: '#b91c1c',
+      background: 'var(--color-error-bg)',
+      color: 'var(--color-error)',
     };
   }
 
   return {
-    background: '#e0f2fe',
-    color: '#0369a1',
+    background: 'var(--color-primary-soft)',
+    color: 'var(--color-primary)',
   };
 }
 
@@ -75,7 +75,7 @@ function getPulseStyle(isLoading: boolean, pulsePhase: boolean): { borderColor: 
 
   return {
     borderColor: pulsePhase ? 'var(--color-primary)' : 'var(--color-primary-outline)',
-    boxShadow: pulsePhase ? '0 0 0 2px rgba(8, 145, 178, 0.15)' : '0 0 0 1px rgba(8, 145, 178, 0.08)',
+    boxShadow: pulsePhase ? '0 0 0 2px rgba(3, 78, 162, 0.15)' : '0 0 0 1px rgba(3, 78, 162, 0.08)',
   };
 }
 

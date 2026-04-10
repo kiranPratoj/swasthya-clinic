@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { updateDoctorSettings } from '@/app/actions';
-import type { Doctor, WorkingHours } from '@/lib/types';
+import type { Doctor, WorkingHours, WorkingHourDay } from '@/lib/types';
 
 type Day = keyof WorkingHours;
 const DAYS: { id: Day; label: string }[] = [
@@ -19,31 +19,73 @@ export default function SettingsForm({ doctor }: { doctor: Doctor | null }) {
   const [loading, setLoading] = useState(false);
   const [saved, setSaved] = useState(false);
   const DEFAULT_HOURS: WorkingHours = {
-    mon: { open: true,  start: '09:00', end: '17:00' },
-    tue: { open: true,  start: '09:00', end: '17:00' },
-    wed: { open: true,  start: '09:00', end: '17:00' },
-    thu: { open: true,  start: '09:00', end: '17:00' },
-    fri: { open: true,  start: '09:00', end: '17:00' },
-    sat: { open: true,  start: '09:00', end: '13:00' },
-    sun: { open: false, start: '09:00', end: '13:00' },
+    mon: { open: true,  slots: [{ start: '09:00', end: '17:00' }] },
+    tue: { open: true,  slots: [{ start: '09:00', end: '17:00' }] },
+    wed: { open: true,  slots: [{ start: '09:00', end: '17:00' }] },
+    thu: { open: true,  slots: [{ start: '09:00', end: '17:00' }] },
+    fri: { open: true,  slots: [{ start: '09:00', end: '17:00' }] },
+    sat: { open: true,  slots: [{ start: '09:00', end: '13:00' }] },
+    sun: { open: false, slots: [{ start: '09:00', end: '13:00' }] },
   };
 
-  const [workingHours, setWorkingHours] = useState<WorkingHours>(
-    doctor?.working_hours || DEFAULT_HOURS
-  );
+  const [workingHours, setWorkingHours] = useState<WorkingHours>(() => {
+    // Migrate old data on the fly if needed
+    const initial = doctor?.working_hours || DEFAULT_HOURS;
+    const migrated: any = {};
+    for (const day of Object.keys(initial) as Day[]) {
+      const dayData = initial[day] as any;
+      if (dayData) {
+        if (!dayData.slots && dayData.start && dayData.end) {
+          migrated[day] = { open: dayData.open, slots: [{ start: dayData.start, end: dayData.end }] };
+        } else {
+          migrated[day] = dayData;
+        }
+      }
+    }
+    return migrated as WorkingHours;
+  });
 
   const handleDayToggle = (day: Day) => {
-    setWorkingHours(prev => ({
-      ...prev,
-      [day]: { ...(prev[day] ?? { start: '09:00', end: '17:00' }), open: !prev[day]?.open },
-    }));
+    setWorkingHours(prev => {
+      const currentDay = prev[day] || { slots: [{ start: '09:00', end: '17:00' }], open: false };
+      return {
+        ...prev,
+        [day]: { ...currentDay, open: !currentDay.open },
+      };
+    });
   };
 
-  const handleTimeChange = (day: Day, field: 'start' | 'end', value: string) => {
-    setWorkingHours(prev => ({
-      ...prev,
-      [day]: { ...prev[day], [field]: value },
-    }));
+  const handleTimeChange = (day: Day, slotIndex: number, field: 'start' | 'end', value: string) => {
+    setWorkingHours(prev => {
+      const currentDay = prev[day] || { open: true, slots: [{ start: '09:00', end: '17:00' }] };
+      const newSlots = [...(currentDay.slots || [{ start: '09:00', end: '17:00' }])];
+      newSlots[slotIndex] = { ...newSlots[slotIndex], [field]: value };
+      return {
+        ...prev,
+        [day]: { ...currentDay, slots: newSlots },
+      };
+    });
+  };
+
+  const handleAddSlot = (day: Day) => {
+    setWorkingHours(prev => {
+      const currentDay = prev[day] || { open: true, slots: [{ start: '09:00', end: '17:00' }] };
+      return {
+        ...prev,
+        [day]: { ...currentDay, slots: [...(currentDay.slots || []), { start: '14:00', end: '18:00' }] },
+      };
+    });
+  };
+
+  const handleRemoveSlot = (day: Day, slotIndex: number) => {
+    setWorkingHours(prev => {
+      const currentDay = prev[day] || { open: true, slots: [{ start: '09:00', end: '17:00' }] };
+      const newSlots = currentDay.slots.filter((_, i) => i !== slotIndex);
+      return {
+        ...prev,
+        [day]: { ...currentDay, slots: newSlots },
+      };
+    });
   };
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -119,44 +161,70 @@ export default function SettingsForm({ doctor }: { doctor: Doctor | null }) {
       <div style={sectionStyle}>
         <h2 style={headingStyle}>Section 2 — Working Hours</h2>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-          {DAYS.map(({ id, label }) => (
-            <div key={id} style={{ 
-              display: 'grid', 
-              gridTemplateColumns: '100px 1fr 1fr', 
-              alignItems: 'center', 
-              gap: '1rem',
-              padding: '0.5rem 0',
-              borderBottom: id === 'sun' ? 'none' : '1px solid var(--color-bg)'
-            }}>
-              <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', margin: 0, cursor: 'pointer', textTransform: 'none' }}>
-                <input
-                  type="checkbox"
-                  checked={!!workingHours[id]?.open}
-                  onChange={() => handleDayToggle(id)}
-                  style={{ width: 'auto' }}
-                />
-                {label}
-              </label>
-              
-              <div style={{ opacity: workingHours[id]?.open ? 1 : 0.4 }}>
-                <input
-                  type="time"
-                  value={workingHours[id]?.start ?? '09:00'}
-                  disabled={!workingHours[id]?.open}
-                  onChange={(e) => handleTimeChange(id, 'start', e.target.value)}
-                />
-              </div>
+          {DAYS.map(({ id, label }) => {
+            const dayData = workingHours[id] || { open: false, slots: [] };
+            const isOpen = dayData.open;
+            const slots = dayData.slots || [];
 
-              <div style={{ opacity: workingHours[id]?.open ? 1 : 0.4 }}>
-                <input
-                  type="time"
-                  value={workingHours[id]?.end ?? '17:00'}
-                  disabled={!workingHours[id]?.open}
-                  onChange={(e) => handleTimeChange(id, 'end', e.target.value)}
-                />
+            return (
+              <div key={id} style={{ 
+                display: 'flex', 
+                alignItems: 'flex-start', 
+                gap: '1rem',
+                padding: '1rem 0',
+                borderBottom: id === 'sun' ? 'none' : '1px solid var(--color-bg)'
+              }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', width: '100px', cursor: 'pointer', textTransform: 'none', paddingTop: '0.5rem' }}>
+                  <input
+                    type="checkbox"
+                    checked={!!isOpen}
+                    onChange={() => handleDayToggle(id)}
+                    style={{ width: 'auto' }}
+                  />
+                  {label}
+                </label>
+                
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', flex: 1 }}>
+                  {slots.map((slot, index) => (
+                    <div key={index} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: '1rem', alignItems: 'center', opacity: isOpen ? 1 : 0.4 }}>
+                      <input
+                        type="time"
+                        value={slot.start || '09:00'}
+                        disabled={!isOpen}
+                        onChange={(e) => handleTimeChange(id, index, 'start', e.target.value)}
+                      />
+                      <input
+                        type="time"
+                        value={slot.end || '17:00'}
+                        disabled={!isOpen}
+                        onChange={(e) => handleTimeChange(id, index, 'end', e.target.value)}
+                      />
+                      {slots.length > 1 && (
+                        <button 
+                          type="button" 
+                          onClick={() => handleRemoveSlot(id, index)}
+                          disabled={!isOpen}
+                          style={{ background: 'none', border: 'none', color: 'var(--color-error)', cursor: isOpen ? 'pointer' : 'not-allowed', padding: '0.5rem' }}
+                          title="Remove slot"
+                        >
+                          ✕
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                  {isOpen && (
+                    <button 
+                      type="button" 
+                      onClick={() => handleAddSlot(id)}
+                      style={{ background: 'none', border: 'none', color: 'var(--color-primary)', fontWeight: '600', cursor: 'pointer', textAlign: 'left', padding: '0.25rem 0', width: 'fit-content' }}
+                    >
+                      + Add Slot
+                    </button>
+                  )}
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
 

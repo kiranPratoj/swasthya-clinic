@@ -1,4 +1,4 @@
-import { getDb } from '@/lib/db';
+import { getClinicDb } from '@/lib/db';
 import type { QueueItem } from '@/lib/types';
 
 type TokenCardProps = {
@@ -15,7 +15,7 @@ function formatVisitType(value: QueueItem['visit_type']): string {
 export default async function TokenCard({
   appointment,
 }: TokenCardProps) {
-  const db = getDb();
+  const db = getClinicDb(appointment.clinic_id);
 
   const [{ data: clinic }, { count }] = await Promise.all([
     db.from('clinics').select('name').eq('id', appointment.clinic_id).single(),

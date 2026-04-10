@@ -1,5 +1,5 @@
 import { headers } from 'next/headers';
-import { getDb } from '@/lib/db';
+import { getClinicDb } from '@/lib/db';
 import PatientIntakeForm from './PatientIntakeForm';
 
 export default async function IntakePage({
@@ -35,7 +35,7 @@ export default async function IntakePage({
     );
   }
 
-  const { data: doctor, error } = await getDb()
+  const { data: doctor, error } = await getClinicDb(clinicId)
     .from('doctors')
     .select('*')
     .eq('clinic_id', clinicId)

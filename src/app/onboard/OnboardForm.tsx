@@ -10,13 +10,13 @@ const slugRegex = /^[a-z0-9-]{3,30}$/;
 type Step = 1 | 2 | 3 | 'success';
 
 const DEFAULT_WORKING_HOURS: WorkingHours = {
-  mon: { open: true, start: '09:00', end: '13:00' },
-  tue: { open: true, start: '09:00', end: '13:00' },
-  wed: { open: true, start: '09:00', end: '13:00' },
-  thu: { open: true, start: '09:00', end: '13:00' },
-  fri: { open: true, start: '09:00', end: '13:00' },
-  sat: { open: true, start: '09:00', end: '13:00' },
-  sun: { open: false, start: '09:00', end: '13:00' },
+  mon: { open: true, slots: [{ start: '09:00', end: '13:00' }] },
+  tue: { open: true, slots: [{ start: '09:00', end: '13:00' }] },
+  wed: { open: true, slots: [{ start: '09:00', end: '13:00' }] },
+  thu: { open: true, slots: [{ start: '09:00', end: '13:00' }] },
+  fri: { open: true, slots: [{ start: '09:00', end: '13:00' }] },
+  sat: { open: true, slots: [{ start: '09:00', end: '13:00' }] },
+  sun: { open: false, slots: [{ start: '09:00', end: '13:00' }] },
 };
 
 const DAYS = [
@@ -243,13 +243,13 @@ export default function OnboardForm() {
                   setManualSlug(true);
                 }} 
                 style={{ 
-                  borderColor: slugStatusMsg ? 'var(--color-error)' : (isSlugAvailable ? 'var(--color-accent)' : undefined),
+                  borderColor: slugStatusMsg ? 'var(--color-error)' : (isSlugAvailable ? 'var(--color-success)' : undefined),
                   paddingRight: '2.5rem'
                 }}
               />
               <div style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)' }}>
                 {checkingSlug && <div className="animate-spin" style={{ width: '16px', height: '16px', border: '2px solid var(--color-primary-soft)', borderTopColor: 'var(--color-primary)', borderRadius: '50%' }} />}
-                {!checkingSlug && isSlugAvailable === true && <span style={{ color: 'var(--color-accent)' }}>✓</span>}
+                {!checkingSlug && isSlugAvailable === true && <span style={{ color: 'var(--color-success)' }}>✓</span>}
                 {!checkingSlug && isSlugAvailable === false && <span style={{ color: 'var(--color-error)' }}>✗</span>}
               </div>
             </div>
@@ -263,7 +263,7 @@ export default function OnboardForm() {
             onClick={handleNext} 
             disabled={!isStep1Valid}
             style={{
-              marginTop: '1rem', padding: '0.875rem', background: isStep1Valid ? 'var(--color-primary)' : '#94a3b8',
+              marginTop: '1rem', padding: '0.875rem', background: isStep1Valid ? 'var(--color-primary)' : 'var(--color-disabled)',
               color: 'white', border: 'none', borderRadius: 'var(--radius-md)', fontWeight: '700',
               cursor: isStep1Valid ? 'pointer' : 'not-allowed'
             }}
@@ -303,20 +303,30 @@ export default function OnboardForm() {
                   <input 
                     type="time" 
                     disabled={!workingHours[key as keyof WorkingHours]?.open}
-                    value={workingHours[key as keyof WorkingHours]?.start}
-                    onChange={(e) => setWorkingHours(prev => ({
-                      ...prev,
-                      [key]: { ...prev[key as keyof WorkingHours], start: e.target.value }
-                    }))}
+                    value={workingHours[key as keyof WorkingHours]?.slots?.[0]?.start || '09:00'}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      setWorkingHours(prev => {
+                        const day = prev[key as keyof WorkingHours] || { open: false, slots: [{ start: '09:00', end: '13:00' }] };
+                        const slots = [...(day.slots || [{ start: '09:00', end: '13:00' }])];
+                        slots[0] = { ...slots[0], start: value };
+                        return { ...prev, [key]: { ...day, slots } };
+                      });
+                    }}
                   />
                   <input 
                     type="time" 
                     disabled={!workingHours[key as keyof WorkingHours]?.open}
-                    value={workingHours[key as keyof WorkingHours]?.end}
-                    onChange={(e) => setWorkingHours(prev => ({
-                      ...prev,
-                      [key]: { ...prev[key as keyof WorkingHours], end: e.target.value }
-                    }))}
+                    value={workingHours[key as keyof WorkingHours]?.slots?.[0]?.end || '13:00'}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      setWorkingHours(prev => {
+                        const day = prev[key as keyof WorkingHours] || { open: false, slots: [{ start: '09:00', end: '13:00' }] };
+                        const slots = [...(day.slots || [{ start: '09:00', end: '13:00' }])];
+                        slots[0] = { ...slots[0], end: value };
+                        return { ...prev, [key]: { ...day, slots } };
+                      });
+                    }}
                   />
                 </div>
               ))}
@@ -355,7 +365,7 @@ export default function OnboardForm() {
             <button 
               onClick={handleNext}
               disabled={!isStep2Valid}
-              style={{ flex: 2, padding: '0.875rem', background: isStep2Valid ? 'var(--color-primary)' : '#94a3b8', color: 'white', border: 'none', borderRadius: 'var(--radius-md)', fontWeight: '700', cursor: isStep2Valid ? 'pointer' : 'not-allowed' }}
+              style={{ flex: 2, padding: '0.875rem', background: isStep2Valid ? 'var(--color-primary)' : 'var(--color-disabled)', color: 'white', border: 'none', borderRadius: 'var(--radius-md)', fontWeight: '700', cursor: isStep2Valid ? 'pointer' : 'not-allowed' }}
             >
               Review Registration
             </button>
@@ -365,7 +375,7 @@ export default function OnboardForm() {
 
       {step === 3 && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-          <div style={{ padding: '1.25rem', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-lg)', background: 'var(--color-bg)-soft' }}>
+          <div style={{ padding: '1.25rem', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-lg)', background: 'var(--color-bg-soft)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
               <h3 style={{ fontSize: '1rem', fontWeight: '800' }}>Review Details</h3>
               <button onClick={() => setStep(1)} style={{ color: 'var(--color-primary)', border: 'none', background: 'none', fontWeight: '600', cursor: 'pointer', fontSize: '0.8125rem' }}>Edit</button>

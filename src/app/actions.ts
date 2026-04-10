@@ -2,7 +2,7 @@
 
 import { headers } from 'next/headers';
 import { revalidatePath } from 'next/cache';
-import { getDb, auditLog } from '@/lib/db';
+import { getDb, getClinicDb, auditLog } from '@/lib/db';
 import type {
   Appointment,
   AppointmentStatus,
@@ -27,6 +27,11 @@ async function getClinicId(): Promise<string> {
 async function getClinicSlug(clinicId: string): Promise<string> {
   const { data: clinic } = await getDb().from('clinics').select('slug').eq('id', clinicId).single();
   return clinic?.slug ?? '';
+}
+
+async function getTenantDb(): Promise<{ clinicId: string; db: ReturnType<typeof getClinicDb> }> {
+  const clinicId = await getClinicId();
+  return { clinicId, db: getClinicDb(clinicId) };
 }
 
 // ─── Clinic onboarding ────────────────────────────────────────────────────────
@@ -78,8 +83,7 @@ export async function checkSlugAvailable(slug: string): Promise<boolean> {
 // ─── Appointments ─────────────────────────────────────────────────────────────
 
 export async function createAppointment(formData: FormData): Promise<{ appointmentId: string; tokenNumber: number; slug: string }> {
-  const clinicId = await getClinicId();
-  const db = getDb();
+  const { clinicId, db } = await getTenantDb();
 
   const patientName = formData.get('patientName') as string;
   const age = formData.get('age') ? parseInt(formData.get('age') as string) : null;
@@ -87,6 +91,10 @@ export async function createAppointment(formData: FormData): Promise<{ appointme
   const complaint = formData.get('complaint') as string;
   const visitType = (formData.get('visitType') as string) || 'walk-in';
   const bookedFor = (formData.get('bookedFor') as string) || new Date().toISOString().split('T')[0];
+  
+  const payment_utr = formData.get('payment_utr') as string | null;
+  const payment_amount = formData.get('payment_amount') ? parseFloat(formData.get('payment_amount') as string) : null;
+  const payment_status = (payment_utr || payment_amount) ? 'verified' : 'pending';
 
   // Upsert patient by phone
   let patientId: string;
@@ -134,6 +142,9 @@ export async function createAppointment(formData: FormData): Promise<{ appointme
       complaint,
       status: 'confirmed',  // receptionist intake = patient is present
       booked_for: bookedFor,
+      payment_utr,
+      payment_amount,
+      payment_status,
     })
     .select('id')
     .single();
@@ -141,6 +152,10 @@ export async function createAppointment(formData: FormData): Promise<{ appointme
   if (apptErr) throw new Error(apptErr.message);
 
   await auditLog(clinicId, 'receptionist', 'appointment_created', appt.id, { tokenNumber, visitType });
+
+  if (payment_utr || payment_amount) {
+    await auditLog(clinicId, 'receptionist', 'receipt_scanned', appt.id, { payment_utr, payment_amount });
+  }
 
   // Get slug for redirect
   const { data: clinic } = await db.from('clinics').select('slug').eq('id', clinicId).single();
@@ -156,8 +171,7 @@ export async function updateAppointmentStatus(
   status: AppointmentStatus,
   notes?: string
 ): Promise<void> {
-  const clinicId = await getClinicId();
-  const db = getDb();
+  const { clinicId, db } = await getTenantDb();
 
   const update: Partial<Appointment> = { status };
   if (notes !== undefined) update.notes = notes;
@@ -193,8 +207,7 @@ export async function cancelAppointment(
   appointmentId: string,
   reason?: string
 ): Promise<void> {
-  const clinicId = await getClinicId();
-  const db = getDb();
+  const { clinicId, db } = await getTenantDb();
 
   const { error } = await db
     .from('appointments')
@@ -216,8 +229,7 @@ export async function cancelAppointment(
 }
 
 export async function markNoShow(appointmentId: string): Promise<void> {
-  const clinicId = await getClinicId();
-  const db = getDb();
+  const { clinicId, db } = await getTenantDb();
 
   const { error } = await db
     .from('appointments')
@@ -241,8 +253,7 @@ export async function rescheduleAppointment(
   newDate: string,
   reason?: string
 ): Promise<{ newAppointmentId: string; newToken: number }> {
-  const clinicId = await getClinicId();
-  const db = getDb();
+  const { clinicId, db } = await getTenantDb();
   const normalizedDate = newDate.trim();
 
   if (!/^\d{4}-\d{2}-\d{2}$/.test(normalizedDate)) {
@@ -326,8 +337,7 @@ export async function rescheduleAppointment(
 // ─── Queries ──────────────────────────────────────────────────────────────────
 
 export async function getClinicQueue(date?: string): Promise<QueueItem[]> {
-  const clinicId = await getClinicId();
-  const db = getDb();
+  const { clinicId, db } = await getTenantDb();
   const targetDate = date ?? new Date().toISOString().split('T')[0];
 
   const { data, error } = await db
@@ -343,8 +353,7 @@ export async function getClinicQueue(date?: string): Promise<QueueItem[]> {
 }
 
 export async function getPatientHistory(phone: string): Promise<Appointment[]> {
-  const clinicId = await getClinicId();
-  const db = getDb();
+  const { clinicId, db } = await getTenantDb();
 
   const { data: patient } = await db
     .from('patients')
@@ -368,8 +377,7 @@ export async function getPatientHistory(phone: string): Promise<Appointment[]> {
 }
 
 export async function getPatientByPhone(phone: string): Promise<PatientWithHistory | null> {
-  const clinicId = await getClinicId();
-  const db = getDb();
+  const { clinicId, db } = await getTenantDb();
 
   const { data: patient } = await db
     .from('patients')
@@ -394,8 +402,7 @@ export async function getPatientByPhone(phone: string): Promise<PatientWithHisto
 export async function getAllPatients(): Promise<
   Array<{ id: string; name: string; phone: string; age: number | null; visitCount: number; lastVisit: string | null }>
 > {
-  const clinicId = await getClinicId();
-  const db = getDb();
+  const { clinicId, db } = await getTenantDb();
 
   const { data: patients, error: patientsError } = await db
     .from('patients')
@@ -442,8 +449,7 @@ export async function getAllPatients(): Promise<
 export async function searchPatients(
   query: string
 ): Promise<Array<{ id: string; name: string; phone: string; visitCount: number; lastVisit: string | null }>> {
-  const clinicId = await getClinicId();
-  const db = getDb();
+  const { clinicId, db } = await getTenantDb();
   const trimmedQuery = query.trim();
 
   if (!trimmedQuery) return [];
@@ -531,8 +537,7 @@ export async function searchPatients(
 export async function getPatientProfile(
   patientId: string
 ): Promise<{ patient: Patient; appointments: Appointment[] } | null> {
-  const clinicId = await getClinicId();
-  const db = getDb();
+  const { clinicId, db } = await getTenantDb();
 
   const { data: patient, error: patientError } = await db
     .from('patients')
@@ -564,8 +569,7 @@ export async function updatePatient(
   patientId: string,
   updates: { name: string; phone: string }
 ): Promise<void> {
-  const clinicId = await getClinicId();
-  const db = getDb();
+  const { clinicId, db } = await getTenantDb();
 
   const { data: patient, error: patientError } = await db
     .from('patients')
@@ -600,8 +604,7 @@ export async function updatePatient(
 }
 
 export async function getAppointmentByToken(token: number, date?: string): Promise<QueueItem | null> {
-  const clinicId = await getClinicId();
-  const db = getDb();
+  const { clinicId, db } = await getTenantDb();
   const targetDate = date ?? new Date().toISOString().split('T')[0];
 
   const { data } = await db
@@ -616,9 +619,9 @@ export async function getAppointmentByToken(token: number, date?: string): Promi
 }
 
 export async function getPatientAppointments(patientId: string): Promise<Appointment[]> {
-  const clinicId = await getClinicId();
+  const { clinicId, db } = await getTenantDb();
   const today = new Date().toISOString().split('T')[0];
-  const { data, error } = await getDb()
+  const { data, error } = await db
     .from('appointments')
     .select('*')
     .eq('clinic_id', clinicId)
@@ -631,8 +634,8 @@ export async function getPatientAppointments(patientId: string): Promise<Appoint
 }
 
 export async function getPatientVisitHistory(patientId: string): Promise<VisitHistory[]> {
-  const clinicId = await getClinicId();
-  const { data, error } = await getDb()
+  const { clinicId, db } = await getTenantDb();
+  const { data, error } = await db
     .from('visit_history')
     .select('*')
     .eq('clinic_id', clinicId)
@@ -646,9 +649,22 @@ export async function getPatientVisitHistory(patientId: string): Promise<VisitHi
 // ─── Admin stats ──────────────────────────────────────────────────────────────
 
 export async function getAdminStats(date?: string) {
-  const clinicId = await getClinicId();
-  const db = getDb();
+  const { clinicId, db } = await getTenantDb();
   const targetDate = date ?? new Date().toISOString().split('T')[0];
+  type AdminAppointmentRow = {
+    complaint: string;
+    created_at: string;
+    id: string;
+    patient: Array<{ name: string | null }> | null;
+    status: AppointmentStatus;
+    token_number: number;
+    visit_type: string;
+  };
+  type AdminAuditLogRow = {
+    created_at: string;
+    meta: { status?: string } | null;
+    target_id: string | null;
+  };
 
   // 1. Fetch all appointments for the target date
   const { data: appts } = await db
@@ -658,7 +674,7 @@ export async function getAdminStats(date?: string) {
     .eq('booked_for', targetDate)
     .order('token_number', { ascending: true });
 
-  const all = appts ?? [];
+  const all = (appts ?? []) as unknown as AdminAppointmentRow[];
   const total = all.length;
   const waiting = all.filter(a => a.status === 'booked' || a.status === 'confirmed').length;
   const consulting = all.filter(a => a.status === 'in_progress').length;
@@ -678,8 +694,8 @@ export async function getAdminStats(date?: string) {
   let totalWaitMs = 0;
   let waitCount = 0;
 
-  for (const log of logs ?? []) {
-    const meta = log.meta as any;
+  for (const log of (logs ?? []) as AdminAuditLogRow[]) {
+    const meta = log.meta;
     if (meta?.status === 'in_progress') {
       const appt = all.find(a => a.id === log.target_id);
       if (appt) {
@@ -722,10 +738,12 @@ export async function getAdminStats(date?: string) {
   if (doctor) {
     const dayOfWeek = new Date(targetDate).toLocaleDateString('en-US', { weekday: 'short' }).toLowerCase() as keyof typeof doctor.working_hours;
     const hours = doctor.working_hours[dayOfWeek];
-    if (hours && hours.open && hours.start && hours.end) {
-      const [startH, startM] = hours.start.split(':').map(Number);
-      const [endH, endM] = hours.end.split(':').map(Number);
-      const totalMins = (endH * 60 + endM) - (startH * 60 + startM);
+    if (hours && hours.open && hours.slots.length > 0) {
+      const totalMins = hours.slots.reduce((sum, slot) => {
+        const [startH, startM] = slot.start.split(':').map(Number);
+        const [endH, endM] = slot.end.split(':').map(Number);
+        return sum + ((endH * 60 + endM) - (startH * 60 + startM));
+      }, 0);
       const totalSlots = totalMins / doctor.slot_duration_mins;
       utilization = totalSlots > 0 ? Math.round((total / totalSlots) * 100) : 0;
     }
@@ -736,7 +754,7 @@ export async function getAdminStats(date?: string) {
   const flagged = all
     .filter(a => (a.status === 'booked' || a.status === 'confirmed') && (now - new Date(a.created_at).getTime()) > 30 * 60000)
     .map(a => ({
-      name: (a as any).patient?.name ?? 'Unknown',
+      name: a.patient?.[0]?.name ?? 'Unknown',
       waitTime: Math.floor((now - new Date(a.created_at).getTime()) / 60000)
     }));
 
@@ -748,8 +766,13 @@ export async function getAdminStats(date?: string) {
 }
 
 export async function getRecentActivity(limit: number = 10) {
-  const clinicId = await getClinicId();
-  const db = getDb();
+  const { clinicId, db } = await getTenantDb();
+  type RecentActivityRow = {
+    appointment: Array<{ patient: Array<{ name: string | null }> | null }> | null;
+    created_at: string;
+    id: string;
+    meta: { oldStatus?: string; status?: string } | null;
+  };
 
   const { data } = await db
     .from('audit_log')
@@ -759,11 +782,11 @@ export async function getRecentActivity(limit: number = 10) {
     .order('created_at', { ascending: false })
     .limit(limit);
 
-  return (data ?? []).map(log => ({
+  return ((data ?? []) as RecentActivityRow[]).map(log => ({
     id: log.id,
-    patientName: (log as any).appointment?.patient?.name ?? 'Unknown',
-    oldStatus: (log.meta as any)?.oldStatus ?? 'unknown',
-    newStatus: (log.meta as any)?.status ?? 'unknown',
+    patientName: log.appointment?.[0]?.patient?.[0]?.name ?? 'Unknown',
+    oldStatus: log.meta?.oldStatus ?? 'unknown',
+    newStatus: log.meta?.status ?? 'unknown',
     timestamp: log.created_at
   }));
 }
@@ -771,8 +794,7 @@ export async function getRecentActivity(limit: number = 10) {
 // ─── Doctor settings ──────────────────────────────────────────────────────────
 
 export async function updateDoctorSettings(formData: FormData): Promise<void> {
-  const clinicId = await getClinicId();
-  const db = getDb();
+  const { clinicId, db } = await getTenantDb();
 
   const { data: doctor } = await db
     .from('doctors')
@@ -799,8 +821,8 @@ export async function updateDoctorSettings(formData: FormData): Promise<void> {
 }
 
 export async function getDoctorForClinic(): Promise<Doctor | null> {
-  const clinicId = await getClinicId();
-  const { data } = await getDb()
+  const { clinicId, db } = await getTenantDb();
+  const { data } = await db
     .from('doctors')
     .select('*')
     .eq('clinic_id', clinicId)
@@ -814,7 +836,7 @@ export async function logCommunicationEvent(
   data: Omit<CommunicationEvent, 'id' | 'created_at'>
 ): Promise<void> {
   const clinicId = data.clinic_id;
-  await getDb().from('communication_events').insert(data);
+  await getClinicDb(clinicId).from('communication_events').insert(data);
   await auditLog(clinicId, 'system', 'communication_sent', data.appointment_id ?? undefined, {
     channel: data.channel,
     template: data.template_name,
@@ -834,7 +856,7 @@ export async function raisePatientIssue(
   clinicId: string,
   complaint: string
 ): Promise<{ tokenNumber: number | null }> {
-  const db = getDb();
+  const db = getClinicDb(clinicId);
   const today = new Date().toISOString().split('T')[0];
 
   // Get doctor for this clinic
@@ -877,8 +899,7 @@ export async function raisePatientIssue(
 }
 
 export async function callNextPatient(): Promise<void> {
-  const clinicId = await getClinicId();
-  const db = getDb();
+  const { clinicId, db } = await getTenantDb();
   const today = new Date().toISOString().split('T')[0];
 
   // Find the first waiting appointment (booked or confirmed) for today
@@ -912,8 +933,8 @@ export async function callNextPatient(): Promise<void> {
 }
 
 export async function getAppointmentDetails(appointmentId: string): Promise<QueueItem | null> {
-  const clinicId = await getClinicId();
-  const { data } = await getDb()
+  const { clinicId, db } = await getTenantDb();
+  const { data } = await db
     .from('appointments')
     .select('*, patient:patients(*)')
     .eq('id', appointmentId)
@@ -1002,4 +1023,3 @@ export async function saveVisitRecord(
   // updateAppointmentStatus handles visit_history insertion when status is 'completed'
   await updateAppointmentStatus(appointmentId, 'completed', summary);
 }
-

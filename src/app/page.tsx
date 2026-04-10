@@ -1,98 +1,195 @@
 import Link from 'next/link';
-
-function StethoscopeIcon() {
-  return (
-    <svg width="60" height="60" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <circle cx="20" cy="20" r="20" fill="#0891b2"/>
-      <path d="M13 12c0-1.1.9-2 2-2h2c1.1 0 2 .9 2 2v6c0 3.3-2.7 6-6 6v2c0 2.2 1.8 4 4 4s4-1.8 4-4v-1.1c1.7-.4 3-2 3-3.9V14" 
-            stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
-      <circle cx="27" cy="13" r="2" stroke="white" strokeWidth="1.8"/>
-    </svg>
-  );
-}
+import BrandMark from '@/components/BrandMark';
 
 export default function HomePage() {
-  return (
-    <div className="max-w-7xl px-4" style={{ display: 'flex', flexDirection: 'column', gap: '4rem', paddingBottom: '4rem' }}>
-      {/* Hero Section */}
-      <section style={{ textAlign: 'center', padding: '4rem 1rem 2rem', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1.5rem' }}>
-        <StethoscopeIcon />
-        <h1 style={{ fontSize: 'clamp(2.5rem, 8vw, 4rem)', fontWeight: 850, color: 'var(--color-text)', lineHeight: 1.1, maxWidth: '900px', letterSpacing: '-0.02em' }}>
-          Run your clinic. <span style={{ color: 'var(--color-primary)' }}>Not your paperwork.</span>
-        </h1>
-        <p style={{ color: 'var(--color-text-muted)', fontSize: '1.25rem', maxWidth: '640px', lineHeight: 1.6 }}>
-          Voice-first patient intake in Kannada & English. Live queue management. Token cards. Built for Indian tier-1 and tier-2 clinics.
-        </p>
-        <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', justifyContent: 'center', marginTop: '1rem' }}>
-          <Link href="/onboard" style={{
-            padding: '1rem 2rem', background: 'var(--color-primary)', color: 'white',
-            borderRadius: 'var(--radius-md)', fontWeight: 700, fontSize: '1.125rem', textDecoration: 'none',
-            boxShadow: 'var(--shadow-md)'
-          }}>
-            Register Your Clinic →
-          </Link>
-          <Link href="/drpriya/admin" style={{
-            padding: '1rem 2rem', background: 'white', color: 'var(--color-primary)',
-            borderRadius: 'var(--radius-md)', fontWeight: 700, fontSize: '1.125rem', textDecoration: 'none',
-            border: '2px solid var(--color-primary-outline)'
-          }}>
-            View Live Demo →
-          </Link>
-        </div>
-      </section>
+  const workstreams = [
+    'Voice intake for the front desk',
+    'Realtime queue for the doctor',
+    'Patient tokens and mobile follow-up',
+  ];
 
-      {/* How it works strip */}
-      <section style={{ background: 'white', borderTop: '1px solid var(--color-border)', borderBottom: '1px solid var(--color-border)', padding: '3rem 1rem' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '2rem', maxWidth: '1000px', margin: '0 auto' }}>
-          {[
-            { step: '1', title: 'Speak', desc: 'Receptionist speaks — patient registered in seconds' },
-            { step: '2', title: 'Triage', desc: 'Doctor sees live queue — marks tokens done in one tap' },
-            { step: '3', title: 'Printed', desc: 'Patient gets printed token — knows exactly where they stand' },
-          ].map((item) => (
-            <div key={item.step} style={{ display: 'flex', gap: '1.25rem', alignItems: 'flex-start' }}>
-              <div style={{ 
-                width: '3rem', height: '3rem', borderRadius: '50%', background: 'var(--color-primary-soft)', 
-                color: 'var(--color-primary)', display: 'grid', placeItems: 'center', fontWeight: 800, fontSize: '1.25rem', flexShrink: 0
-              }}>{item.step}</div>
-              <div>
-                <h3 style={{ fontSize: '1.125rem', fontWeight: 700, marginBottom: '0.25rem' }}>{item.title}</h3>
-                <p style={{ color: 'var(--color-text-muted)', fontSize: '0.9375rem', lineHeight: 1.5 }}>{item.desc}</p>
+  const sections = [
+    {
+      title: 'Reception',
+      body: 'Register patients in Kannada, Hindi, or English and move them into the queue without typing every field.',
+    },
+    {
+      title: 'Doctor Console',
+      body: 'Track today’s queue, consult patients in sequence, and keep the waiting room informed in real time.',
+    },
+    {
+      title: 'Patient View',
+      body: 'Share token status, booking links, and issue-raising flows from the same clinic system.',
+    },
+  ];
+
+  return (
+    <div style={{ paddingBottom: '4.5rem' }}>
+      <section
+        style={{
+          position: 'relative',
+          overflow: 'hidden',
+          marginLeft: 'calc(50% - 50vw)',
+          marginRight: 'calc(50% - 50vw)',
+          background: 'linear-gradient(90deg, #ffffff 0%, #f8fbff 42%, #eef5ff 100%)',
+          borderBottom: '1px solid rgba(3, 78, 162, 0.08)',
+        }}
+      >
+        <div
+          style={{
+            position: 'absolute',
+            top: '-5rem',
+            right: '-7rem',
+            width: '24rem',
+            height: '24rem',
+            borderRadius: '999px',
+            background: 'radial-gradient(circle, rgba(227, 6, 19, 0.2) 0%, rgba(227, 6, 19, 0) 72%)',
+          }}
+        />
+        <div className="max-w-7xl px-4" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(290px, 1fr))', gap: '2rem', alignItems: 'stretch', paddingTop: '4.5rem', paddingBottom: '3.25rem' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1.15rem', justifyContent: 'center', minWidth: 0 }}>
+            <div className="nh-eyebrow">Clinic operations platform</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+              <BrandMark size={70} />
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
+                <span style={{ color: 'var(--color-error)', fontWeight: 800, letterSpacing: '0.08em', textTransform: 'uppercase', fontSize: '0.78rem' }}>
+                  Voice-first OPD
+                </span>
+                <span style={{ color: 'var(--color-primary)', fontWeight: 800, fontSize: '1.05rem' }}>
+                  Swasthya Clinic
+                </span>
               </div>
             </div>
-          ))}
+            <h1 style={{ fontSize: 'clamp(2.75rem, 7vw, 4.9rem)', fontWeight: 800, color: 'var(--color-primary)', lineHeight: 1.03, letterSpacing: '-0.04em', maxWidth: '10ch' }}>
+              Faster intake. Clearer queues. Better clinic flow.
+            </h1>
+            <p style={{ color: 'var(--color-text)', fontSize: '1.2rem', maxWidth: '40rem', lineHeight: 1.65 }}>
+              A hospital-blue shell for your clinic app: strong hierarchy, disciplined surfaces, and patient-facing flows built for reception, doctors, and waiting rooms.
+            </p>
+            <div style={{ display: 'flex', gap: '0.85rem', flexWrap: 'wrap', marginTop: '0.35rem' }}>
+              <Link href="/onboard" className="nh-btn nh-btn-primary">
+                Register Clinic
+              </Link>
+              <Link href="/login" className="nh-btn nh-btn-secondary">
+                Staff Login
+              </Link>
+            </div>
+          </div>
+
+          <aside
+            style={{
+              background: 'var(--color-primary)',
+              color: '#fff',
+              borderRadius: '20px',
+              padding: '1.75rem',
+              boxShadow: 'var(--shadow-md)',
+              display: 'flex',
+              flexDirection: 'column',
+              justifyContent: 'space-between',
+              minHeight: '100%',
+              gap: '1.5rem',
+            }}
+          >
+            <div>
+              <div style={{ fontSize: '0.78rem', fontWeight: 800, letterSpacing: '0.1em', textTransform: 'uppercase', opacity: 0.82, marginBottom: '0.8rem' }}>
+                One system, three workstreams
+              </div>
+              <div style={{ display: 'grid', gap: '1rem' }}>
+                {workstreams.map((item) => (
+                  <div key={item} style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', alignItems: 'flex-start', paddingBottom: '1rem', borderBottom: '1px solid rgba(255,255,255,0.16)' }}>
+                    <p style={{ fontSize: '1.05rem', fontWeight: 700, lineHeight: 1.45 }}>{item}</p>
+                    <span style={{ fontSize: '1.8rem', lineHeight: 1 }}>→</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div style={{ display: 'grid', gap: '0.4rem' }}>
+              <span style={{ fontSize: '0.78rem', opacity: 0.8 }}>Default launch path</span>
+              <strong style={{ fontSize: '1.1rem' }}>Onboard clinic → Login → Intake → Queue</strong>
+            </div>
+          </aside>
         </div>
       </section>
 
-      {/* Feature Grid */}
-      <section style={{ maxWidth: '1000px', margin: '0 auto', width: '100%' }}>
-        <h2 style={{ textAlign: 'center', fontSize: '2rem', fontWeight: 800, marginBottom: '3rem' }}>Everything your clinic needs</h2>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '1.5rem' }}>
-          {[
-            { icon: '🎙️', title: 'Voice intake', desc: 'Speak naturally in Kannada or English to register patients.' },
-            { icon: '⚡', title: 'Live queue', desc: 'Realtime updates for doctor and receptionist consoles.' },
-            { icon: '🎫', title: 'Printable tokens', desc: 'Generate physical tokens for easy patient tracking.' },
-            { icon: '🏢', title: 'Multi-clinic', desc: 'One platform for multiple locations and doctor profiles.' },
-            { icon: '📱', title: 'Works on any device', desc: 'Optimized for tablets, mobiles, and desktop browsers.' },
-            { icon: '☁️', title: 'No app download', desc: 'Web-based access for immediate deployment.' },
-          ].map((feature) => (
-            <div key={feature.title} style={{ padding: '2rem', background: 'white', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-lg)', transition: 'transform 0.2s' }}>
-              <div style={{ fontSize: '2rem', marginBottom: '1rem' }}>{feature.icon}</div>
-              <h3 style={{ fontSize: '1.25rem', fontWeight: 700, marginBottom: '0.5rem' }}>{feature.title}</h3>
-              <p style={{ color: 'var(--color-text-muted)', lineHeight: 1.6 }}>{feature.desc}</p>
+      <section className="max-w-7xl px-4" style={{ marginTop: '-1.5rem', position: 'relative', zIndex: 2 }}>
+        <div
+          style={{
+            background: 'var(--color-primary)',
+            color: '#fff',
+            borderRadius: '18px',
+            overflow: 'hidden',
+            boxShadow: 'var(--shadow-md)',
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+          }}
+        >
+          <div style={{ padding: '1.75rem 1.6rem', borderRight: '1px solid rgba(255,255,255,0.12)' }}>
+            <div style={{ fontSize: '0.95rem', opacity: 0.82, marginBottom: '0.35rem' }}>I’m working in</div>
+            <div style={{ fontSize: '1.45rem', fontWeight: 800 }}>Reception / Doctor / Patient</div>
+          </div>
+          <div style={{ padding: '1.75rem 1.6rem', borderRight: '1px solid rgba(255,255,255,0.12)' }}>
+            <div style={{ fontSize: '0.95rem', opacity: 0.82, marginBottom: '0.35rem' }}>Start with</div>
+            <div style={{ fontSize: '1.15rem', fontWeight: 700 }}>Onboarding or staff sign-in</div>
+          </div>
+          <div style={{ padding: '1.2rem', background: 'rgba(255,255,255,0.18)', display: 'grid', placeItems: 'center' }}>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem', justifyContent: 'center' }}>
+              <Link href="/onboard" className="nh-btn nh-btn-secondary" style={{ background: '#fff' }}>
+                Register Clinic
+              </Link>
+              <Link href="/login" className="nh-btn nh-btn-secondary" style={{ background: 'transparent', borderColor: 'rgba(255,255,255,0.26)', color: '#fff' }}>
+                Open Console
+              </Link>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="max-w-7xl px-4" style={{ paddingTop: '4.5rem', display: 'grid', gap: '3rem' }}>
+        <div style={{ display: 'grid', gap: '0.75rem', maxWidth: '46rem' }}>
+          <div className="nh-eyebrow">Designed for real clinic work</div>
+          <h2 style={{ fontSize: '2.35rem', fontWeight: 800, lineHeight: 1.08, letterSpacing: '-0.03em' }}>
+            Built around the front desk, the doctor, and the patient handoff.
+          </h2>
+          <p style={{ color: 'var(--color-text-muted)', fontSize: '1.02rem', lineHeight: 1.7 }}>
+            The UI keeps the same palette and contrast logic throughout the app: blue for action and orientation, white for working surfaces, grey for clinical readability, and red only where urgency matters.
+          </p>
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '1.5rem' }}>
+          {sections.map((section) => (
+            <div key={section.title} style={{ paddingBottom: '1.2rem', borderBottom: '1px solid var(--color-divider)' }}>
+              <div className="nh-eyebrow" style={{ marginBottom: '0.6rem' }}>{section.title}</div>
+              <p style={{ fontSize: '1.3rem', fontWeight: 800, marginBottom: '0.55rem' }}>{section.title}</p>
+              <p style={{ color: 'var(--color-text-muted)', lineHeight: 1.7 }}>{section.body}</p>
             </div>
           ))}
         </div>
-      </section>
 
-      {/* Footer */}
-      <footer style={{ borderTop: '1px solid var(--color-border)', paddingTop: '3rem', textAlign: 'center', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-        <p style={{ color: 'var(--color-text-muted)', fontWeight: 500 }}>
-          Built with <span style={{ color: 'var(--color-text)' }}>Sarvam AI · Supabase · Next.js</span>
-        </p>
-        <a href="https://github.com/kiranPratoj/swasthya-clinic" style={{ color: 'var(--color-primary)', fontWeight: 600, textDecoration: 'none' }}>
-          View on GitHub →
-        </a>
-      </footer>
+        <div className="nh-panel" style={{ padding: '1.75rem', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '1.5rem', alignItems: 'center' }}>
+          <div style={{ display: 'grid', gap: '0.55rem' }}>
+            <div className="nh-eyebrow">Deployment posture</div>
+            <h3 style={{ fontSize: '1.6rem', fontWeight: 800, lineHeight: 1.15 }}>Start with one clinic. Expand to multiple locations from the same product shell.</h3>
+            <p style={{ color: 'var(--color-text-muted)', lineHeight: 1.7 }}>
+              Keep the operations consistent across clinics while preserving each clinic slug, doctor roster, queue, settings, and patient-facing links.
+            </p>
+          </div>
+          <div style={{ display: 'grid', gap: '0.85rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: '0.8rem', borderBottom: '1px solid var(--color-primary-outline)' }}>
+              <span style={{ color: 'var(--color-text-muted)' }}>Stack</span>
+              <strong>Sarvam AI · Supabase · Next.js</strong>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: '0.8rem', borderBottom: '1px solid var(--color-primary-outline)' }}>
+              <span style={{ color: 'var(--color-text-muted)' }}>Default launch order</span>
+              <strong>Intake → Queue → Consult</strong>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <span style={{ color: 'var(--color-text-muted)' }}>Primary audience</span>
+              <strong>Indian outpatient clinics</strong>
+            </div>
+          </div>
+        </div>
+      </section>
     </div>
   );
 }

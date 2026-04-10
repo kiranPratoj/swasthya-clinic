@@ -4,6 +4,121 @@ declare global {
   var __SWASTHYA_CLIENT: SupabaseClient | undefined;
 }
 
+const CLINIC_SCOPED_TABLES = new Set([
+  'appointments',
+  'audit_log',
+  'clinic_users',
+  'communication_events',
+  'doctors',
+  'patients',
+  'staff',
+  'visit_history',
+]);
+
+type QueryState = {
+  applied: boolean;
+  clinicFilterSeen: boolean;
+  clinicId: string;
+  table: string;
+};
+
+type ProxyTarget = object;
+
+function requireClinicId(clinicId: string): string {
+  const normalizedClinicId = clinicId.trim();
+  if (!normalizedClinicId) {
+    throw new Error('Clinic-scoped database access requires a clinic_id.');
+  }
+  return normalizedClinicId;
+}
+
+function enforceClinicId(value: unknown, clinicId: string) {
+  if (value == null) return;
+  if (value !== clinicId) {
+    throw new Error(
+      `Mismatched clinic_id filter for scoped database access. Expected "${clinicId}".`
+    );
+  }
+}
+
+function withClinicId<T>(payload: T, clinicId: string): T {
+  if (payload == null || typeof payload !== 'object') return payload;
+
+  if (Array.isArray(payload)) {
+    return payload.map((entry) => withClinicId(entry, clinicId)) as T;
+  }
+
+  const record = payload as Record<string, unknown>;
+  enforceClinicId(record.clinic_id, clinicId);
+  return { ...record, clinic_id: clinicId } as T;
+}
+
+function validateMutationPayload<T>(payload: T, clinicId: string): T {
+  if (payload == null || typeof payload !== 'object') return payload;
+
+  if (Array.isArray(payload)) {
+    return payload.map((entry) => validateMutationPayload(entry, clinicId)) as T;
+  }
+
+  const record = payload as Record<string, unknown>;
+  enforceClinicId(record.clinic_id, clinicId);
+  return payload;
+}
+
+function applyClinicScope(builder: ProxyTarget, state: QueryState) {
+  if (state.applied || !CLINIC_SCOPED_TABLES.has(state.table)) {
+    return builder;
+  }
+
+  state.applied = true;
+  if (!state.clinicFilterSeen) {
+    return ((builder as { eq: (column: string, value: string) => ProxyTarget }).eq)(
+      'clinic_id',
+      state.clinicId
+    );
+  }
+
+  return builder;
+}
+
+function wrapScopedBuilder(builder: ProxyTarget, state: QueryState): ProxyTarget {
+  return new Proxy(builder, {
+    get(target, prop, receiver) {
+      if (prop === 'then') {
+        const scopedTarget = applyClinicScope(target, state);
+        return (scopedTarget as { then: PromiseLike<unknown>['then'] }).then.bind(scopedTarget);
+      }
+
+      const value = Reflect.get(target, prop, receiver);
+      if (typeof value !== 'function') {
+        return value;
+      }
+
+      return (...args: unknown[]) => {
+        let nextArgs = args;
+
+        if (prop === 'eq' && args[0] === 'clinic_id') {
+          enforceClinicId(args[1], state.clinicId);
+          state.clinicFilterSeen = true;
+        }
+
+        if ((prop === 'insert' || prop === 'upsert') && CLINIC_SCOPED_TABLES.has(state.table)) {
+          nextArgs = [withClinicId(args[0], state.clinicId), ...args.slice(1)];
+        }
+
+        if (prop === 'update' && CLINIC_SCOPED_TABLES.has(state.table)) {
+          nextArgs = [validateMutationPayload(args[0], state.clinicId), ...args.slice(1)];
+        }
+
+        const result = (value as (...fnArgs: unknown[]) => unknown).apply(target, nextArgs);
+        return result && typeof result === 'object'
+          ? wrapScopedBuilder(result as ProxyTarget, state)
+          : result;
+      };
+    },
+  });
+}
+
 export function getDb(): SupabaseClient {
   if (!process.env.NEXT_PUBLIC_SUPABASE_URL) {
     throw new Error('NEXT_PUBLIC_SUPABASE_URL is not configured.');
@@ -23,18 +138,53 @@ export function getDb(): SupabaseClient {
   return globalThis.__SWASTHYA_CLIENT;
 }
 
+export function createClinicScopedDb(
+  baseClient: SupabaseClient,
+  clinicId: string
+): SupabaseClient {
+  const normalizedClinicId = requireClinicId(clinicId);
+
+  return new Proxy(baseClient, {
+    get(target, prop, receiver) {
+      if (prop === 'from') {
+        return (table: string) => {
+          const builder = target.from(table);
+          return wrapScopedBuilder(builder as ProxyTarget, {
+            applied: false,
+            clinicFilterSeen: false,
+            clinicId: normalizedClinicId,
+            table,
+          });
+        };
+      }
+
+      if (prop === 'rpc') {
+        return (fn: string, args?: Record<string, unknown>, options?: Record<string, unknown>) => {
+          if (args) {
+            enforceClinicId(args.clinic_id, normalizedClinicId);
+            enforceClinicId(args.p_clinic_id, normalizedClinicId);
+          }
+          return target.rpc(fn, args, options as Parameters<SupabaseClient['rpc']>[2]);
+        };
+      }
+
+      return Reflect.get(target, prop, receiver);
+    },
+  }) as SupabaseClient;
+}
+
+export function getClinicDb(clinicId: string): SupabaseClient {
+  return createClinicScopedDb(getDb(), clinicId);
+}
+
 /** Scoped query helper — all clinic queries go through this */
 export function clinicQuery(clinicId: string) {
-  const db = getDb();
+  const db = getClinicDb(clinicId);
   return {
-    appointments: () =>
-      db.from('appointments').select('*').eq('clinic_id', clinicId),
-    patients: () =>
-      db.from('patients').select('*').eq('clinic_id', clinicId),
-    doctors: () =>
-      db.from('doctors').select('*').eq('clinic_id', clinicId),
-    auditLog: () =>
-      db.from('audit_log').select('*').eq('clinic_id', clinicId),
+    appointments: () => db.from('appointments').select('*'),
+    patients: () => db.from('patients').select('*'),
+    doctors: () => db.from('doctors').select('*'),
+    auditLog: () => db.from('audit_log').select('*'),
   };
 }
 
@@ -63,8 +213,7 @@ export async function auditLog(
   targetId?: string,
   meta?: Record<string, unknown>
 ) {
-  await getDb().from('audit_log').insert({
-    clinic_id: clinicId,
+  await getClinicDb(clinicId).from('audit_log').insert({
     actor,
     action,
     target_id: targetId ?? null,
