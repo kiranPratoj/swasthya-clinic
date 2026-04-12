@@ -214,6 +214,72 @@ button { cursor: pointer; font-family: inherit; }
   flex-wrap: wrap;
 }
 
+.bda-nav--desktop {
+  display: flex;
+}
+
+.bda-mobile-nav {
+  display: none;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.bda-mobile-menu {
+  position: relative;
+}
+
+.bda-mobile-menu[open] .bda-mobile-menu-trigger {
+  background: var(--color-primary-soft);
+  border-color: var(--color-primary-outline);
+  box-shadow: var(--shadow-sm);
+}
+
+.bda-mobile-menu-trigger {
+  list-style: none;
+  color: var(--color-primary);
+  font-size: 0.9rem;
+  font-weight: 700;
+  padding: 0.7rem 1rem;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-primary-outline);
+  background: #fff;
+  transition: background 0.15s, color 0.15s, border-color 0.15s, box-shadow 0.15s;
+  white-space: nowrap;
+}
+
+.bda-mobile-menu-trigger::-webkit-details-marker {
+  display: none;
+}
+
+.bda-mobile-menu-panel {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 0.6rem);
+  min-width: 14rem;
+  display: grid;
+  gap: 0.1rem;
+  padding: 0.5rem;
+  border-radius: 1rem;
+  border: 1px solid rgba(3, 78, 162, 0.12);
+  background: rgba(255, 255, 255, 0.98);
+  box-shadow: var(--shadow-md);
+  backdrop-filter: blur(16px);
+}
+
+.bda-mobile-menu-link {
+  display: block;
+  padding: 0.75rem 0.85rem;
+  border-radius: 0.8rem;
+  color: var(--color-text);
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+
+.bda-mobile-menu-link:hover {
+  background: var(--color-primary-soft);
+  color: var(--color-primary);
+}
+
 .bda-nav-link {
   color: var(--color-primary);
   font-size: 0.9rem;
@@ -760,6 +826,610 @@ button { cursor: pointer; font-family: inherit; }
   max-width: 42rem;
 }
 
+.medilite-landing {
+  padding-bottom: 4rem;
+  background:
+    radial-gradient(circle at top right, rgba(3, 78, 162, 0.06), transparent 24%),
+    linear-gradient(180deg, #ffffff 0%, #f8fbff 48%, #ffffff 100%);
+}
+
+.medilite-hero {
+  padding: 4.5rem 0 3.5rem;
+}
+
+.medilite-hero-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.02fr) minmax(360px, 0.98fr);
+  gap: 3.5rem;
+  align-items: center;
+}
+
+.medilite-hero-copy {
+  display: grid;
+  gap: 1.35rem;
+}
+
+.medilite-eyebrow-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.9rem;
+  align-items: center;
+}
+
+.medilite-sarvam-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.4rem 0.8rem;
+  border-radius: 999px;
+  background: var(--color-primary-soft);
+  color: var(--color-primary);
+  font-size: 0.82rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.medilite-hero-title {
+  font-size: clamp(3.5rem, 7vw, 6rem);
+  line-height: 0.94;
+  letter-spacing: -0.065em;
+  font-weight: 800;
+  max-width: 10ch;
+  color: var(--color-text);
+}
+
+.medilite-hero-body {
+  font-size: 1.1rem;
+  line-height: 1.75;
+  color: #65707d;
+  max-width: 40rem;
+}
+
+.medilite-hero-actions {
+  display: flex;
+  gap: 0.85rem;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.medilite-chip-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 0.35rem;
+}
+
+.medilite-chip {
+  background: white;
+  border: 1px solid var(--color-primary-outline);
+  color: var(--color-primary);
+  border-radius: 999px;
+  padding: 0.72rem 0.95rem;
+  font-weight: 700;
+  font-size: 0.9rem;
+  box-shadow: var(--shadow-sm);
+}
+
+.medilite-hero-visual {
+  position: relative;
+}
+
+.medilite-product-stage {
+  border-radius: 2rem;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.9) 0%, rgba(241, 247, 255, 0.98) 100%);
+  border: 1px solid rgba(3, 78, 162, 0.16);
+  padding: 1.35rem;
+  box-shadow: var(--shadow-lg);
+  display: grid;
+  gap: 1.1rem;
+  position: relative;
+  overflow: hidden;
+}
+
+.medilite-product-stage::before {
+  content: "";
+  position: absolute;
+  inset: -20% auto auto -10%;
+  width: 18rem;
+  height: 18rem;
+  border-radius: 50%;
+  background: rgba(3, 78, 162, 0.08);
+  filter: blur(20px);
+}
+
+.medilite-stage-header,
+.medilite-stage-grid,
+.medilite-sarvam-copy,
+.medilite-sarvam-diagram {
+  position: relative;
+  z-index: 1;
+}
+
+.medilite-stage-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.medilite-stage-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+}
+
+.medilite-stage-title {
+  font-size: 1.05rem;
+  font-weight: 800;
+  color: var(--color-text);
+}
+
+.medilite-stage-kicker {
+  font-size: 0.78rem;
+  color: var(--color-text-muted);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-weight: 700;
+}
+
+.medilite-stage-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.45rem 0.8rem;
+  border-radius: 999px;
+  background: white;
+  border: 1px solid var(--color-primary-outline);
+  color: var(--color-primary);
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.medilite-stage-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.medilite-ui-card {
+  background: white;
+  border-radius: 1.4rem;
+  border: 1px solid rgba(3, 78, 162, 0.12);
+  padding: 1.2rem;
+  box-shadow: var(--shadow-sm);
+  display: grid;
+  gap: 0.75rem;
+}
+
+.medilite-ui-card-primary {
+  background: linear-gradient(180deg, #034ea2 0%, #0a5bb8 100%);
+  color: white;
+}
+
+.medilite-ui-card-compact {
+  align-content: start;
+}
+
+.medilite-ui-card h3 {
+  font-size: 1.15rem;
+  font-weight: 800;
+  line-height: 1.15;
+}
+
+.medilite-ui-card p {
+  color: inherit;
+  opacity: 0.86;
+  line-height: 1.6;
+  font-size: 0.92rem;
+}
+
+.medilite-ui-card-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.medilite-ui-label {
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-weight: 800;
+  color: var(--color-primary);
+}
+
+.medilite-ui-card-primary .medilite-ui-label {
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.medilite-ui-dot {
+  width: 0.65rem;
+  height: 0.65rem;
+  border-radius: 999px;
+  background: #34b68a;
+  box-shadow: 0 0 0 6px rgba(52, 182, 138, 0.14);
+}
+
+.medilite-wave-block {
+  display: grid;
+  gap: 0.6rem;
+  padding-top: 0.4rem;
+}
+
+.medilite-wave-bars {
+  display: flex;
+  gap: 0.35rem;
+  align-items: end;
+  min-height: 2.7rem;
+}
+
+.medilite-wave-bars span {
+  display: block;
+  width: 0.4rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.9);
+  animation: medilite-wave 1.2s ease-in-out infinite;
+}
+
+.medilite-wave-bars span:nth-child(1) { height: 1.2rem; }
+.medilite-wave-bars span:nth-child(2) { height: 2rem; animation-delay: 120ms; }
+.medilite-wave-bars span:nth-child(3) { height: 2.6rem; animation-delay: 210ms; }
+.medilite-wave-bars span:nth-child(4) { height: 1.8rem; animation-delay: 320ms; }
+.medilite-wave-bars span:nth-child(5) { height: 1.35rem; animation-delay: 420ms; }
+
+.medilite-wave-copy {
+  font-size: 0.86rem;
+  font-weight: 700;
+  opacity: 0.86;
+}
+
+.medilite-mini-list {
+  list-style: none;
+  display: grid;
+  gap: 0.5rem;
+}
+
+.medilite-mini-list li,
+.medilite-history-stack div,
+.medilite-showcase-lines div,
+.medilite-sarvam-points div {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.68rem 0.8rem;
+  border-radius: 0.85rem;
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-size: 0.9rem;
+}
+
+.medilite-history-stack {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.medilite-section {
+  padding: 5rem 0 0;
+}
+
+.medilite-section-soft {
+  background: linear-gradient(180deg, rgba(233, 242, 255, 0.42) 0%, rgba(255, 255, 255, 0) 100%);
+  margin-top: 2rem;
+  padding-top: 4.5rem;
+}
+
+.medilite-section-head {
+  display: grid;
+  gap: 0.95rem;
+  margin-bottom: 2rem;
+}
+
+.medilite-section-title {
+  font-size: clamp(2.4rem, 5vw, 4rem);
+  font-weight: 800;
+  line-height: 1.03;
+  letter-spacing: -0.05em;
+  max-width: 14ch;
+}
+
+.medilite-section-body {
+  color: #67727f;
+  font-size: 1.04rem;
+  line-height: 1.75;
+  max-width: 48rem;
+}
+
+.medilite-workflow-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.medilite-workflow-card {
+  background: white;
+  border: 1px solid var(--color-primary-outline);
+  border-radius: 1.3rem;
+  padding: 1.25rem;
+  box-shadow: var(--shadow-sm);
+  display: grid;
+  gap: 0.7rem;
+}
+
+.medilite-workflow-number {
+  width: 2.2rem;
+  height: 2.2rem;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  background: var(--color-primary-soft);
+  color: var(--color-primary);
+  font-size: 0.8rem;
+  font-weight: 800;
+}
+
+.medilite-workflow-card h3,
+.medilite-usp-card h3,
+.medilite-stakeholder-card h3,
+.medilite-showcase-content h3 {
+  font-size: 1.15rem;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+.medilite-workflow-card p,
+.medilite-usp-card p {
+  color: #6b7480;
+  line-height: 1.65;
+}
+
+.medilite-usp-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.medilite-usp-card {
+  background: white;
+  border: 1px solid rgba(3, 78, 162, 0.12);
+  border-radius: 1.2rem;
+  padding: 1.2rem;
+  display: grid;
+  gap: 0.7rem;
+  box-shadow: var(--shadow-sm);
+}
+
+.medilite-usp-icon {
+  width: 2.6rem;
+  height: 2.6rem;
+  border-radius: 0.9rem;
+  display: grid;
+  place-items: center;
+  color: var(--color-primary);
+  background: var(--color-primary-soft);
+}
+
+.medilite-usp-kicker {
+  font-size: 0.75rem;
+  font-weight: 800;
+  color: var(--color-primary);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.medilite-sarvam-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 0.95fr) minmax(340px, 0.95fr);
+  gap: 2rem;
+  align-items: center;
+}
+
+.medilite-sarvam-points {
+  display: grid;
+  gap: 0.8rem;
+  margin-top: 1rem;
+}
+
+.medilite-sarvam-diagram {
+  background: linear-gradient(180deg, #ffffff 0%, #edf5ff 100%);
+  border: 1px solid var(--color-primary-outline);
+  border-radius: 1.6rem;
+  box-shadow: var(--shadow-md);
+  padding: 1.4rem;
+  display: grid;
+  gap: 0.8rem;
+}
+
+.medilite-diagram-node {
+  padding: 1rem 1.1rem;
+  border-radius: 1rem;
+  background: white;
+  border: 1px solid rgba(3, 78, 162, 0.12);
+  color: var(--color-text);
+  font-weight: 700;
+}
+
+.medilite-diagram-node-primary {
+  background: var(--color-primary);
+  color: white;
+  border-color: var(--color-primary);
+}
+
+.medilite-diagram-arrow {
+  color: var(--color-primary);
+  font-size: 1.15rem;
+  font-weight: 800;
+  text-align: center;
+}
+
+.medilite-stakeholder-grid,
+.medilite-showcase-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.medilite-showcase-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.medilite-stakeholder-card,
+.medilite-showcase-card {
+  background: white;
+  border: 1px solid rgba(3, 78, 162, 0.12);
+  border-radius: 1.2rem;
+  padding: 1.2rem;
+  box-shadow: var(--shadow-sm);
+}
+
+.medilite-stakeholder-card ul {
+  list-style: none;
+  display: grid;
+  gap: 0.8rem;
+  margin-top: 1rem;
+}
+
+.medilite-stakeholder-card li {
+  position: relative;
+  padding-left: 1.1rem;
+  color: #67727f;
+  line-height: 1.6;
+}
+
+.medilite-stakeholder-card li::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0.55rem;
+  width: 0.45rem;
+  height: 0.45rem;
+  border-radius: 999px;
+  background: var(--color-primary);
+}
+
+.medilite-narrative {
+  padding: 5.5rem 0 0;
+}
+
+.medilite-narrative .max-w-6xl {
+  background: linear-gradient(180deg, #0a3f82 0%, #034ea2 100%);
+  color: white;
+  border-radius: 2rem;
+  padding: 3.4rem;
+  box-shadow: var(--shadow-lg);
+}
+
+.medilite-narrative-title {
+  margin-top: 0.9rem;
+  font-size: clamp(2.3rem, 5vw, 4rem);
+  line-height: 1.04;
+  letter-spacing: -0.045em;
+  font-weight: 800;
+  max-width: 14ch;
+}
+
+.medilite-narrative-body {
+  margin-top: 1.2rem;
+  max-width: 42rem;
+  color: rgba(255, 255, 255, 0.82);
+  line-height: 1.85;
+  font-size: 1.02rem;
+}
+
+.medilite-showcase-frame {
+  border-radius: 1rem;
+  background: linear-gradient(180deg, #fdfefe 0%, #eef5ff 100%);
+  border: 1px solid var(--color-primary-outline);
+  padding: 1rem;
+  display: grid;
+  gap: 1rem;
+  min-height: 15rem;
+}
+
+.medilite-showcase-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  color: var(--color-primary);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.medilite-showcase-dot {
+  width: 0.6rem;
+  height: 0.6rem;
+  border-radius: 999px;
+  background: var(--color-primary);
+}
+
+.medilite-showcase-content {
+  display: grid;
+  gap: 0.8rem;
+}
+
+.medilite-showcase-lines {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.medilite-final-cta {
+  padding-top: 4.5rem;
+}
+
+.medilite-final-cta-shell {
+  background: linear-gradient(135deg, #034ea2 0%, #0b60be 100%);
+  border-radius: 2rem;
+  padding: 3rem 3rem 3.2rem;
+  color: white;
+  box-shadow: var(--shadow-lg);
+  display: flex;
+  justify-content: space-between;
+  align-items: end;
+  gap: 2rem;
+  flex-wrap: wrap;
+}
+
+.medilite-final-copy {
+  display: grid;
+  gap: 1rem;
+}
+
+.medilite-final-title {
+  font-size: clamp(2.3rem, 5vw, 3.8rem);
+  line-height: 1.04;
+  letter-spacing: -0.05em;
+  font-weight: 800;
+  max-width: 14ch;
+}
+
+.medilite-final-body {
+  max-width: 42rem;
+  color: rgba(255, 255, 255, 0.84);
+  line-height: 1.75;
+}
+
+.medilite-final-actions {
+  display: flex;
+  gap: 0.85rem;
+  flex-wrap: wrap;
+}
+
+.medilite-final-ghost {
+  color: white;
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  background: transparent;
+}
+
+.medilite-final-ghost:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+@keyframes medilite-wave {
+  0%, 100% { transform: scaleY(0.78); opacity: 0.68; }
+  50% { transform: scaleY(1.1); opacity: 1; }
+}
+
 @keyframes hero-panel-rise {
   from {
     opacity: 0;
@@ -914,14 +1584,159 @@ label {
     align-items: flex-start;
   }
 
-  .bda-nav {
+  .bda-nav--desktop {
     flex-wrap: wrap;
   }
 }
 
+@media (max-width: 1100px) {
+  .medilite-hero-grid,
+  .medilite-sarvam-grid,
+  .medilite-workflow-grid,
+  .medilite-usp-grid,
+  .medilite-stakeholder-grid,
+  .medilite-showcase-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .medilite-stage-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 768px) {
+  .medilite-landing {
+    padding-bottom: 2.5rem;
+  }
+
+  .medilite-hero {
+    padding: 2.5rem 0 2.25rem;
+  }
+
+  .medilite-hero-grid,
+  .medilite-workflow-grid,
+  .medilite-usp-grid,
+  .medilite-sarvam-grid,
+  .medilite-stakeholder-grid,
+  .medilite-showcase-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .medilite-hero-title,
+  .medilite-section-title,
+  .medilite-final-title,
+  .medilite-narrative-title {
+    max-width: none;
+  }
+
+  .medilite-chip-grid,
+  .medilite-final-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .medilite-chip-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .medilite-hero-actions {
+    display: flex;
+    flex-wrap: wrap;
+  }
+
+  .medilite-product-stage,
+  .medilite-final-cta-shell,
+  .medilite-narrative .max-w-6xl {
+    border-radius: 1.4rem;
+  }
+
+  .medilite-final-cta-shell,
+  .medilite-narrative .max-w-6xl {
+    padding: 2rem 1.25rem;
+  }
+
+  .medilite-product-stage {
+    padding: 1rem;
+  }
+
+  .medilite-stage-header {
+    align-items: flex-start;
+  }
+
+  .medilite-mini-list li,
+  .medilite-history-stack div,
+  .medilite-showcase-lines div,
+  .medilite-sarvam-points div {
+    display: grid;
+  }
+
+  .bda-nav--desktop {
+    display: none;
+  }
+
+  .bda-mobile-nav {
+    display: flex;
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .bda-mobile-nav .bda-nav-link,
+  .bda-mobile-menu-trigger {
+    min-height: 2.75rem;
+    padding: 0.68rem 0.95rem;
+  }
+
+  .bda-brand {
+    gap: 0.75rem;
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .bda-brand-english {
+    font-size: 1rem;
+  }
+
+  .bda-brand-kicker {
+    font-size: 0.64rem;
+  }
+
+  .bda-prism-badge {
+    font-size: 0.62rem;
+    padding: 0.28rem 0.55rem;
+  }
+
+  .bda-footer .max-w-7xl,
+  .bda-footer-links {
+    grid-template-columns: 1fr;
+  }
+
+  .bda-footer {
+    padding: 3rem 0 2rem;
+  }
+}
+
 @media (max-width: 520px) {
+  .bda-header-shell {
+    padding: 0.75rem 0;
+  }
+
   .bda-brand {
     align-items: flex-start;
+  }
+
+  .bda-mobile-nav {
+    gap: 0.5rem;
+  }
+
+  .bda-mobile-nav .bda-nav-link,
+  .bda-mobile-menu {
+    flex: 1 1 0;
+  }
+
+  .bda-mobile-menu-panel {
+    left: 0;
+    right: 0;
+    min-width: 0;
   }
 
   .bda-footer .max-w-7xl {
@@ -940,8 +1755,40 @@ label {
 }
 
 @media (max-width: 430px) {
-  .bda-brand-english { display: none; }
+  .bda-brand {
+    align-items: center;
+    gap: 0.65rem;
+  }
+
+  .bda-brand-english {
+    display: block;
+    font-size: 0.96rem;
+  }
+
+  .bda-brand-kicker {
+    font-size: 0.6rem;
+  }
+
   .bda-prism-badge { font-size: 0.55rem; padding: 0.15rem 0.4rem; }
+
+  .medilite-hero-title {
+    font-size: clamp(2.4rem, 12vw, 3.4rem);
+  }
+
+  .medilite-chip-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .medilite-hero-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .medilite-stage-badge {
+    font-size: 0.62rem;
+    padding: 0.3rem 0.55rem;
+  }
+
   .bda-header-meta-links {
     gap: 0.6rem;
   }

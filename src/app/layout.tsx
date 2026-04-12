@@ -5,8 +5,8 @@ import { headers } from 'next/headers';
 import BrandMark from '@/components/BrandMark';
 
 export const metadata: Metadata = {
-  title: 'Sarvam Clinic | Clinic Operations Platform',
-  description: 'Sarvam Clinic — a queue-first clinic flow system for Indian OPD clinics, covering intake, live queue, consultation, continuity, and patient token tracking.',
+  title: 'medilite.ai | Smart clinic flow for modern care',
+  description: 'medilite.ai is a voice-first clinic flow and continuity platform for Indian clinics, powered by Sarvam AI.',
 };
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
@@ -24,21 +24,72 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                   <BrandMark size={56} />
                 </div>
                 <div className="bda-brand-text">
-                  <span className="bda-brand-english">Sarvam Clinic</span>
-                  <span className="bda-brand-kicker">Powered by Sarvam AI</span>
+                  <span className="bda-brand-english">medilite.ai</span>
+                  <span className="bda-brand-kicker">Smart clinic flow for modern care</span>
                 </div>
                 <div className="bda-prism-badge">VOICE-FIRST</div>
               </Link>
 
               {!isClinicScopedPage && (
-                <nav className="bda-nav">
-                  <Link href="/login" className="bda-nav-link">
-                    Staff Login
+                <>
+                <nav className="bda-nav bda-nav--desktop">
+                  <Link href="/#product" className="bda-nav-link bda-nav-link--ghost">
+                    Product
+                  </Link>
+                  <Link href="/#workflow" className="bda-nav-link bda-nav-link--ghost">
+                    Workflow
+                  </Link>
+                  <Link href="/#benefits" className="bda-nav-link bda-nav-link--ghost">
+                    Benefits
+                  </Link>
+                  <Link href="/#sarvam" className="bda-nav-link bda-nav-link--ghost">
+                    Why Sarvam AI
+                  </Link>
+                  <Link href="/#clinics" className="bda-nav-link bda-nav-link--ghost">
+                    Clinics
+                  </Link>
+                  <Link href="/#contact" className="bda-nav-link bda-nav-link--ghost">
+                    Contact
+                  </Link>
+                  <Link href="/#workflow" className="bda-nav-link">
+                    See Workflow
                   </Link>
                   <Link href="/onboard" className="bda-nav-link bda-nav-link--primary">
-                    Register Clinic
+                    Book Demo
                   </Link>
                 </nav>
+                <div className="bda-mobile-nav">
+                  <Link href="/onboard" className="bda-nav-link bda-nav-link--primary">
+                    Book Demo
+                  </Link>
+                  <details className="bda-mobile-menu">
+                    <summary className="bda-mobile-menu-trigger">Menu</summary>
+                    <div className="bda-mobile-menu-panel">
+                      <Link href="/#product" className="bda-mobile-menu-link">
+                        Product
+                      </Link>
+                      <Link href="/#workflow" className="bda-mobile-menu-link">
+                        Workflow
+                      </Link>
+                      <Link href="/#benefits" className="bda-mobile-menu-link">
+                        Benefits
+                      </Link>
+                      <Link href="/#sarvam" className="bda-mobile-menu-link">
+                        Why Sarvam AI
+                      </Link>
+                      <Link href="/#clinics" className="bda-mobile-menu-link">
+                        Clinics
+                      </Link>
+                      <Link href="/#contact" className="bda-mobile-menu-link">
+                        Contact
+                      </Link>
+                      <Link href="/login" className="bda-mobile-menu-link">
+                        Staff Login
+                      </Link>
+                    </div>
+                  </details>
+                </div>
+                </>
               )}
             </div>
           </div>
@@ -57,34 +108,38 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                     <BrandMark size={36} />
                   </div>
                   <div>
-                    <div className="bda-footer-title">Sarvam Clinic</div>
+                    <div className="bda-footer-title">medilite.ai</div>
+                    <div className="bda-footer-powered">Powered by Sarvam AI</div>
                   </div>
                 </div>
-                <div className="bda-footer-legal">© 2026 Sarvam Clinic Systems. All rights reserved.</div>
+                <div style={{ color: 'var(--color-text-muted)', maxWidth: '28rem' }}>
+                  Voice-first clinic flow, continuity, and doctor-supportive AI for modern Indian clinics.
+                </div>
+                <div className="bda-footer-legal">© 2026 medilite.ai. All rights reserved.</div>
               </div>
             </div>
             <div className="bda-footer-links">
               <div>
                 <div className="bda-footer-heading">Product</div>
                 <div className="bda-footer-link-list">
-                  <span>Features</span>
-                  <span>Pricing</span>
-                  <span>Security</span>
+                  <Link href="/#product" className="nh-link">Product</Link>
+                  <Link href="/#workflow" className="nh-link">Workflow</Link>
+                  <Link href="/#benefits" className="nh-link">Benefits</Link>
                 </div>
               </div>
               <div>
                 <div className="bda-footer-heading">Resources</div>
                 <div className="bda-footer-link-list">
-                  <span>Documentation</span>
-                  <span>User Guides</span>
-                  <span>Help Center</span>
+                  <Link href="/#sarvam" className="nh-link">Why Sarvam AI</Link>
+                  <Link href="/#clinics" className="nh-link">Clinics</Link>
+                  <Link href="/onboard" className="nh-link">Book Demo</Link>
                 </div>
               </div>
               <div>
-                <div className="bda-footer-heading">Legal</div>
+                <div className="bda-footer-heading">Contact</div>
                 <div className="bda-footer-link-list">
-                  <span>Privacy Policy</span>
-                  <span>Terms of Service</span>
+                  <a href="mailto:hello@medilite.ai" className="nh-link">hello@medilite.ai</a>
+                  <a href="tel:+919000000000" className="nh-link">+91 90000 00000</a>
                   <Link href="/login" className="nh-link">Staff Login</Link>
                 </div>
               </div>
