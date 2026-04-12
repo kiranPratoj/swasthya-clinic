@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
 import { createClient } from '@supabase/supabase-js';
-import { getClinicQueue, updateAppointmentStatus, updateAppointmentPayment } from '@/app/actions';
+import { getClinicQueue, updateAppointmentStatus } from '@/app/actions';
 import type { AppointmentStatus, QueueItem } from '@/lib/types';
 import AppointmentActionsMenu from './AppointmentActionsMenu';
 import NewPatientToast from './NewPatientToast';
@@ -125,7 +125,6 @@ export default function QueueDisplay({
   const [filteredQueue, setFilteredQueue] = useState(initialQueue);
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
-  const [payingId, setPayingId] = useState<string | null>(null);
   const [toastQueue, setToastQueue] = useState<Array<{ id: string; token: number; name: string }>>([]);
   const queueRef = useRef(initialQueue);
 
@@ -272,31 +271,6 @@ export default function QueueDisplay({
       );
     } finally {
       setPendingId(null);
-    }
-  }
-
-  async function handleMarkPaid(id: string, mode: 'cash' | 'upi') {
-    setPayingId(id);
-    setActionError(null);
-    try {
-      const result = await updateAppointmentPayment(id, mode, 'paid');
-      if (!result.persisted) {
-        setActionError('Payment could not be saved to the appointment yet. Apply the payment migration before the demo.');
-        return;
-      }
-      setQueue((current) =>
-        current.map((item) =>
-          item.id === id ? { ...item, payment_status: 'verified', payment_mode: mode } : item
-        )
-      );
-    } catch (error: unknown) {
-      setActionError(
-        error instanceof Error && error.message.trim()
-          ? error.message
-          : 'Could not update the payment.'
-      );
-    } finally {
-      setPayingId(null);
     }
   }
 
@@ -517,31 +491,6 @@ export default function QueueDisplay({
                   </div>
                 </div>
 
-                {/* Payment row — receptionist marks payment after consult completes */}
-                {item.status === 'completed' && (
-                  <div style={{ borderTop: '1px solid var(--color-bg)', paddingTop: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
-                    {item.payment_status === 'verified' ? (
-                      <span style={{ fontSize: '0.8rem', fontWeight: 800, color: 'var(--color-success)', background: 'var(--color-success-bg)', padding: '0.3rem 0.75rem', borderRadius: '999px' }}>
-                        Paid · {item.payment_mode === 'upi' ? 'UPI' : 'Cash'}
-                      </span>
-                    ) : (
-                      <>
-                        <span style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--color-text-muted)' }}>Mark paid:</span>
-                        {(['cash', 'upi'] as const).map((mode) => (
-                          <button
-                            key={mode}
-                            type="button"
-                            disabled={payingId === item.id}
-                            onClick={() => void handleMarkPaid(item.id, mode)}
-                            style={{ padding: '0.35rem 0.85rem', borderRadius: '999px', border: '1px solid var(--color-border)', background: 'white', color: 'var(--color-primary)', fontWeight: 800, fontSize: '0.8rem', cursor: 'pointer' }}
-                          >
-                            {payingId === item.id ? '...' : mode === 'cash' ? 'Cash' : 'UPI'}
-                          </button>
-                        ))}
-                      </>
-                    )}
-                  </div>
-                )}
               </article>
             );
           })}

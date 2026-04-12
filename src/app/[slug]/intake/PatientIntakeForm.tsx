@@ -138,6 +138,8 @@ export default function PatientIntakeForm({
   const [autoFilledFlash, setAutoFilledFlash] = useState(false);
   const [detailsStepVisible, setDetailsStepVisible] = useState(false);
   const [detailsStepLabel, setDetailsStepLabel] = useState<'new' | 'existing' | 'shared-mobile'>('new');
+  const [paymentMode, setPaymentMode] = useState<'cash' | 'upi'>('cash');
+  const [paymentStatus, setPaymentStatus] = useState<'pending' | 'paid'>('pending');
 
   const bookedFor = getTodayIsoDate();
   const missingFields = voiceDraft?.structuredData.missingFields ?? [];
@@ -1078,8 +1080,62 @@ export default function PatientIntakeForm({
               name="allowSharedMobileNewPatient"
               value={allowSharedMobileNewPatient ? 'true' : 'false'}
             />
-            <input type="hidden" name="payment_mode" value="cash" />
-            <input type="hidden" name="payment_status" value="pending" />
+            {/* Payment collection */}
+            <div style={{ display: 'grid', gap: '0.75rem', padding: '1rem', background: 'var(--color-bg)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--color-border)' }}>
+              <p style={{ fontWeight: 800, fontSize: '0.95rem', margin: 0 }}>Payment</p>
+              <div style={{ display: 'grid', gap: '0.5rem' }}>
+                <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.07em' }}>Mode</span>
+                <div style={{ display: 'flex', gap: '0.6rem' }}>
+                  {(['cash', 'upi'] as const).map((mode) => (
+                    <button
+                      key={mode}
+                      type="button"
+                      onClick={() => setPaymentMode(mode)}
+                      style={{
+                        padding: '0.55rem 1.1rem',
+                        borderRadius: '999px',
+                        border: paymentMode === mode ? 'none' : '1px solid var(--color-border)',
+                        background: paymentMode === mode ? 'var(--color-primary)' : 'white',
+                        color: paymentMode === mode ? 'white' : 'var(--color-text)',
+                        fontWeight: 800,
+                        fontSize: '0.9rem',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      {mode === 'cash' ? 'Cash' : 'UPI'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div style={{ display: 'grid', gap: '0.5rem' }}>
+                <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.07em' }}>Status</span>
+                <div style={{ display: 'flex', gap: '0.6rem' }}>
+                  {(['pending', 'paid'] as const).map((status) => (
+                    <button
+                      key={status}
+                      type="button"
+                      onClick={() => setPaymentStatus(status)}
+                      style={{
+                        padding: '0.55rem 1.1rem',
+                        borderRadius: '999px',
+                        border: paymentStatus === status ? 'none' : '1px solid var(--color-border)',
+                        background: paymentStatus === status
+                          ? status === 'paid' ? 'var(--color-success)' : 'var(--color-primary)'
+                          : 'white',
+                        color: paymentStatus === status ? 'white' : 'var(--color-text)',
+                        fontWeight: 800,
+                        fontSize: '0.9rem',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      {status === 'paid' ? 'Collected' : 'Pending'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <input type="hidden" name="payment_mode" value={paymentMode} />
+              <input type="hidden" name="payment_status" value={paymentStatus} />
+            </div>
 
             {submitError && (
               <div

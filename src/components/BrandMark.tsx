@@ -14,11 +14,16 @@ export default function BrandMark({ size = 48, className }: BrandMarkProps) {
       width={size}
       xmlns="http://www.w3.org/2000/svg"
     >
-      <rect x="24" y="8" width="16" height="48" rx="8" fill="var(--color-primary)" />
-      <rect x="8" y="24" width="48" height="16" rx="8" fill="var(--color-primary)" />
-      <rect x="6" y="13" width="14" height="14" rx="4" fill="var(--color-error-strong)" />
-      <rect x="13" y="6" width="14" height="14" rx="4" fill="var(--color-error-strong)" />
-      <circle cx="45" cy="45" r="6" fill="var(--color-error)" opacity="0.92" />
+      <rect x="23" y="7" width="18" height="50" rx="8.5" fill="#2C86F5" opacity="0.92" />
+      <rect x="7" y="23" width="50" height="18" rx="8.5" fill="#1461D3" />
+      <path
+        d="M23 41H16.5C11.8056 41 8 37.1944 8 32.5V23H41L23 41Z"
+        fill="#0B47B8"
+      />
+      <rect x="41" y="23" width="16" height="18" rx="8" fill="#4B9CFF" opacity="0.86" />
+      <circle cx="47" cy="17" r="5" fill="#2C86F5" />
+      <rect x="8" y="23" width="15" height="18" rx="7.5" fill="#0D52C4" />
+      <rect x="23" y="7" width="18" height="16" rx="7.5" fill="#4B9CFF" />
     </svg>
   );
 }

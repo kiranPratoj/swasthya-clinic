@@ -1263,6 +1263,7 @@ export async function generateSoapNote(transcript: string) {
     userPrompt: transcript,
     toolName: 'saveSoapNote',
     toolDescription: 'Saves a structured SOAP note and prescription extracted from transcript',
+    maxTokens: 1500,
     parameters: {
       type: 'object',
       properties: {

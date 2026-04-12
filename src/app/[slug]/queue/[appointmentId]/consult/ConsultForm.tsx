@@ -2,7 +2,7 @@
 
 import { useState, useRef, FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
-import { generateSoapNote, saveVisitRecord, updateAppointmentPayment } from '@/app/actions';
+import { generateSoapNote, saveVisitRecord } from '@/app/actions';
 import type { QueueItem, VisitHistory } from '@/lib/types';
 
 type PrescriptionRow = {
@@ -17,9 +17,6 @@ type SOAPNote = {
   assessment: string;
   plan: string;
 };
-
-type PaymentMode = 'cash' | 'upi';
-type PaymentState = 'pending' | 'paid';
 
 type Props = {
   appointment: QueueItem & { recentHistory?: VisitHistory[] };
@@ -66,10 +63,6 @@ export default function ConsultForm({ appointment, slug }: Props) {
   const [followUpDate, setFollowUpDate] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showPrintView, setShowPrintView] = useState(false);
-  const [paymentMode, setPaymentMode] = useState<PaymentMode>(appointment.payment_mode === 'upi' ? 'upi' : 'cash');
-  const [paymentState, setPaymentState] = useState<PaymentState>(appointment.payment_status === 'verified' ? 'paid' : 'pending');
-  const [isSavingPayment, setIsSavingPayment] = useState(false);
-  const [paymentFeedback, setPaymentFeedback] = useState<string | null>(null);
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
@@ -128,13 +121,17 @@ export default function ConsultForm({ appointment, slug }: Props) {
         try {
           const soapData = await generateSoapNote(text);
           setSoap({
-            subjective: soapData.subjective,
-            objective: soapData.objective,
-            assessment: soapData.assessment,
-            plan: soapData.plan,
+            subjective: soapData.subjective ?? '',
+            objective: soapData.objective ?? '',
+            assessment: soapData.assessment ?? '',
+            plan: soapData.plan ?? '',
           });
-          setDiagnosis(soapData.diagnosis);
-          setPrescription(soapData.prescription);
+          setDiagnosis(soapData.diagnosis ?? '');
+          setPrescription(
+            Array.isArray(soapData.prescription) && soapData.prescription.length > 0
+              ? soapData.prescription
+              : [{ drug: '', dose: '', frequency: '' }]
+          );
         } catch {
           setSoap({
             subjective: text || 'Patient presented with complaint.',
@@ -179,26 +176,6 @@ export default function ConsultForm({ appointment, slug }: Props) {
     }
   };
 
-  const handlePaymentSave = async () => {
-    setIsSavingPayment(true);
-    setPaymentFeedback(null);
-    try {
-      const result = await updateAppointmentPayment(appointment.id, paymentMode, paymentState);
-      setPaymentFeedback(
-        result.persisted
-          ? paymentState === 'paid'
-            ? 'Payment marked as paid.'
-            : 'Payment left as pending.'
-          : 'Payment could not be saved to the appointment yet. Apply the payment migration before the demo.'
-      );
-    } catch (err) {
-      console.error('Payment update error:', err);
-      setPaymentFeedback('Could not update payment right now.');
-    } finally {
-      setIsSavingPayment(false);
-    }
-  };
-
   if (showPrintView) {
     return (
       <div style={{ background: 'white', padding: '2rem', borderRadius: 'var(--radius-lg)', boxShadow: 'var(--shadow-md)' }}>
@@ -218,7 +195,6 @@ export default function ConsultForm({ appointment, slug }: Props) {
             <div style={{ textAlign: 'right' }}>
               <p><strong>Doctor:</strong> Dr. {doctorName}</p>
               <p><strong>Token:</strong> #{appointment.token_number}</p>
-              <p><strong>Payment:</strong> {paymentState === 'paid' ? `Paid · ${paymentMode === 'cash' ? 'Cash' : 'UPI'}` : 'Pending'}</p>
             </div>
           </div>
 
@@ -266,103 +242,6 @@ export default function ConsultForm({ appointment, slug }: Props) {
           <div style={{ fontSize: '3rem' }}>✅</div>
           <h2>Consultation Completed</h2>
           <p>The record has been saved to visit history.</p>
-          <section
-            className="card"
-            style={{
-              maxWidth: '32rem',
-              margin: '0 auto',
-              textAlign: 'left',
-              display: 'grid',
-              gap: '1rem',
-            }}
-          >
-            <div style={{ display: 'grid', gap: '0.25rem' }}>
-              <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 800 }}>Payment</h3>
-              <p style={{ margin: 0, color: 'var(--color-text-muted)' }}>
-                Mark the visit as paid or pending before returning to the queue.
-              </p>
-            </div>
-
-            <div style={{ display: 'grid', gap: '0.5rem' }}>
-              <span style={{ fontSize: '0.8rem', fontWeight: 800, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-                Payment mode
-              </span>
-              <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
-                {(['cash', 'upi'] as const).map((mode) => {
-                  const active = paymentMode === mode;
-                  return (
-                    <button
-                      key={mode}
-                      type="button"
-                      onClick={() => setPaymentMode(mode)}
-                      style={{
-                        padding: '0.7rem 1rem',
-                        borderRadius: '999px',
-                        border: active ? 'none' : '1px solid var(--color-border)',
-                        background: active ? 'var(--color-primary)' : 'white',
-                        color: active ? 'white' : 'var(--color-primary)',
-                        fontWeight: 800,
-                        cursor: 'pointer',
-                      }}
-                    >
-                      {mode === 'cash' ? 'Cash' : 'UPI'}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            <div style={{ display: 'grid', gap: '0.5rem' }}>
-              <span style={{ fontSize: '0.8rem', fontWeight: 800, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-                Payment status
-              </span>
-              <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
-                {(['pending', 'paid'] as const).map((state) => {
-                  const active = paymentState === state;
-                  return (
-                    <button
-                      key={state}
-                      type="button"
-                      onClick={() => setPaymentState(state)}
-                      style={{
-                        padding: '0.7rem 1rem',
-                        borderRadius: '999px',
-                        border: active ? 'none' : '1px solid var(--color-border)',
-                        background: active ? 'var(--color-primary)' : 'white',
-                        color: active ? 'white' : 'var(--color-primary)',
-                        fontWeight: 800,
-                        cursor: 'pointer',
-                      }}
-                    >
-                      {state === 'paid' ? 'Paid' : 'Pending'}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', alignItems: 'center' }}>
-              <button
-                type="button"
-                onClick={handlePaymentSave}
-                disabled={isSavingPayment}
-                style={{
-                  padding: '0.8rem 1.2rem',
-                  background: 'var(--color-primary)',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: 'var(--radius-md)',
-                  fontWeight: 800,
-                  cursor: 'pointer',
-                }}
-              >
-                {isSavingPayment ? 'Saving Payment...' : 'Save Payment'}
-              </button>
-              {paymentFeedback && (
-                <span style={{ color: 'var(--color-text-muted)', fontSize: '0.9rem' }}>{paymentFeedback}</span>
-              )}
-            </div>
-          </section>
           <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center' }}>
             <button 
               onClick={() => window.print()}
@@ -417,34 +296,140 @@ export default function ConsultForm({ appointment, slug }: Props) {
 
   return (
     <div style={{ display: 'grid', gap: '2rem' }}>
+
+      {/* ── 1. Voice recording — primary CTA, always at top ─────────────────── */}
+      <section
+        style={{
+          background: isRecording
+            ? 'var(--color-error-bg)'
+            : isTranscribing
+              ? 'var(--color-warning-bg)'
+              : 'var(--color-primary-soft)',
+          border: `2px solid ${isRecording ? '#fca5a5' : isTranscribing ? 'var(--color-warning)' : 'var(--color-primary-outline)'}`,
+          borderRadius: 'var(--radius-xl)',
+          padding: '1.5rem',
+          display: 'grid',
+          gap: '1.25rem',
+          transition: 'background 0.3s ease, border-color 0.3s ease',
+        }}
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1rem', textAlign: 'center' }}>
+          <h2 style={{ fontSize: '1.15rem', fontWeight: 800, margin: 0, color: isRecording ? 'var(--color-error)' : 'var(--color-primary)' }}>
+            {isRecording ? '● Recording…' : isTranscribing ? 'Processing with AI…' : transcript ? 'Recording done — review below' : null}
+            {!isRecording && !isTranscribing && !transcript && (
+              <span className="mobile-copy-optional">Record the consultation</span>
+            )}
+          </h2>
+
+          <p className="mobile-copy-optional" style={{ margin: 0, fontSize: '0.88rem', color: 'var(--color-text-muted)' }}>
+            {isRecording
+              ? 'Speak naturally. Tap Stop when finished.'
+              : isTranscribing
+                ? 'Sarvam AI is transcribing and extracting notes…'
+                : transcript
+                  ? 'The form below has been pre-filled. Edit anything before submitting.'
+                  : 'Speak through the consultation. AI will fill the form for you.'}
+          </p>
+
+          {!isRecording && !isTranscribing && (
+            <button
+              type="button"
+              onClick={startRecording}
+              disabled={isSubmitting}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.6rem',
+                background: 'var(--color-primary)',
+                color: 'white',
+                border: 'none',
+                padding: '0.9rem 1.6rem',
+                borderRadius: '999px',
+                fontWeight: 800,
+                fontSize: '1rem',
+                boxShadow: 'var(--shadow-sm)',
+                cursor: isSubmitting ? 'not-allowed' : 'pointer',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              🎤 {transcript ? 'Record Again' : 'Start Recording'}
+            </button>
+          )}
+
+          {isRecording && (
+            <button
+              type="button"
+              onClick={stopRecording}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.6rem',
+                background: 'var(--color-error)',
+                color: 'white',
+                border: 'none',
+                padding: '0.9rem 1.6rem',
+                borderRadius: '999px',
+                fontWeight: 800,
+                fontSize: '1rem',
+                cursor: 'pointer',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              🛑 Stop &amp; Process
+            </button>
+          )}
+
+          {isTranscribing && (
+            <span style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '0.5rem',
+              color: 'var(--color-warning)',
+              fontWeight: 800,
+              fontSize: '0.9rem',
+            }}>
+              <span style={{ animation: 'pulse 1s infinite' }}>⏳</span> Processing…
+            </span>
+          )}
+        </div>
+
+        {transcript && (
+          <div style={{ background: 'white', padding: '0.9rem 1rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-primary-outline)' }}>
+            <span style={{ fontSize: '0.68rem', fontWeight: 800, color: 'var(--color-primary)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Transcript</span>
+            <p style={{ margin: '0.4rem 0 0', fontSize: '0.92rem', color: 'var(--color-text)', lineHeight: 1.6 }}>{transcript}</p>
+          </div>
+        )}
+      </section>
+
+      {/* ── 2. Recent continuity — secondary context ─────────────────────────── */}
       {appointment.recentHistory && appointment.recentHistory.length > 0 && (
         <section className="card" style={{ display: 'grid', gap: '1rem' }}>
           <div style={{ display: 'grid', gap: '0.35rem' }}>
-            <h2 style={{ fontSize: '1.1rem', fontWeight: 800, margin: 0 }}>Recent Continuity</h2>
-            <p className="mobile-copy-optional" style={{ color: 'var(--color-text-muted)', margin: 0 }}>
-              Last visits for this patient. Use them if they help, or ignore them and continue.
+            <h2 style={{ fontSize: '1rem', fontWeight: 800, margin: 0 }}>Previous Visits</h2>
+            <p className="mobile-copy-optional" style={{ color: 'var(--color-text-muted)', margin: 0, fontSize: '0.88rem' }}>
+              Context from the last {appointment.recentHistory.length} visit{appointment.recentHistory.length > 1 ? 's' : ''}.
             </p>
           </div>
-          <div style={{ display: 'grid', gap: '0.75rem' }}>
+          <div style={{ display: 'grid', gap: '0.65rem' }}>
             {appointment.recentHistory.map((visit) => (
               <article
                 key={visit.id}
                 style={{
                   border: '1px solid var(--color-border)',
                   borderRadius: 'var(--radius-lg)',
-                  padding: '0.9rem 1rem',
-                  background: 'white',
+                  padding: '0.75rem 1rem',
+                  background: 'var(--color-bg)',
                   display: 'grid',
-                  gap: '0.4rem',
+                  gap: '0.3rem',
                 }}
               >
                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap' }}>
-                  <strong>{extractHeadline(visit.summary)}</strong>
-                  <span style={{ color: 'var(--color-text-muted)', fontSize: '0.85rem' }}>
+                  <strong style={{ fontSize: '0.92rem' }}>{extractHeadline(visit.summary)}</strong>
+                  <span style={{ color: 'var(--color-text-muted)', fontSize: '0.8rem' }}>
                     {new Date(visit.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
                   </span>
                 </div>
-                <p style={{ color: 'var(--color-text-muted)', fontSize: '0.92rem', margin: 0, whiteSpace: 'pre-wrap' }}>
+                <p style={{ color: 'var(--color-text-muted)', fontSize: '0.88rem', margin: 0, whiteSpace: 'pre-wrap' }}>
                   {visit.summary}
                 </p>
               </article>
@@ -453,18 +438,21 @@ export default function ConsultForm({ appointment, slug }: Props) {
         </section>
       )}
 
+      {/* ── 3. Verification form ─────────────────────────────────────────────── */}
       <form onSubmit={handleSubmit} style={{ display: 'grid', gap: '1.5rem' }}>
         <section className="card" style={{ display: 'grid', gap: '1.25rem' }}>
-          <div style={{ display: 'grid', gap: '0.35rem' }}>
-            <h2 style={{ fontSize: '1.1rem', fontWeight: 800, margin: 0 }}>Diagnosis & Prescription</h2>
-            <p className="mobile-copy-optional" style={{ color: 'var(--color-text-muted)', margin: 0 }}>
-              Complete this manually or use the AI Assist below.
+          <div style={{ display: 'grid', gap: '0.2rem' }}>
+            <h2 style={{ fontSize: '1.1rem', fontWeight: 800, margin: 0 }}>
+              {transcript ? 'Verify & Edit' : 'Diagnosis & Prescription'}
+            </h2>
+            <p className="mobile-copy-optional" style={{ color: 'var(--color-text-muted)', margin: 0, fontSize: '0.88rem' }}>
+              {transcript ? 'AI has pre-filled the fields. Correct anything before saving.' : 'Fill in manually, or use the recording button above.'}
             </p>
           </div>
-          
+
           <div>
             <label>Final Diagnosis</label>
-            <input 
+            <input
               type="text"
               value={diagnosis}
               onChange={e => setDiagnosis(e.target.value)}
@@ -512,7 +500,7 @@ export default function ConsultForm({ appointment, slug }: Props) {
 
           <div>
             <label>Follow-up Date</label>
-            <input 
+            <input
               type="date"
               value={followUpDate}
               onChange={e => setFollowUpDate(e.target.value)}
@@ -521,126 +509,34 @@ export default function ConsultForm({ appointment, slug }: Props) {
           </div>
         </section>
 
-        {/* AI Scribe - Integrated for Voice First approach */}
-        <section
-          style={{
-            background: 'var(--color-primary-soft)',
-            padding: '1.5rem',
-            borderRadius: 'var(--radius-xl)',
-            border: '1px solid var(--color-primary-outline)',
-            display: 'grid',
-            gap: '1rem'
-          }}
-        >
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <div style={{ display: 'grid', gap: '0.35rem' }}>
-              <h2 style={{ fontSize: '1.1rem', fontWeight: 800, color: 'var(--color-primary)', margin: 0 }}>AI Consult Assist</h2>
-              <p style={{ fontSize: '0.9rem', color: 'var(--color-text-muted)', margin: 0 }}>
-                Record the consultation to auto-generate notes and prescriptions.
-              </p>
-            </div>
-            {isRecording && <span style={{ color: 'var(--color-error)', fontWeight: 800, animation: 'pulse 1.5s infinite' }}>● RECORDING</span>}
-          </div>
-
-          <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', flexWrap: 'wrap' }}>
-            {!isRecording ? (
-              <button
-                type="button"
-                onClick={startRecording}
-                disabled={isTranscribing || isSubmitting}
-                style={{
-                  background: 'var(--color-primary)',
-                  color: 'white',
-                  border: 'none',
-                  padding: '0.8rem 1.5rem',
-                  borderRadius: '999px',
-                  fontWeight: 800,
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '0.5rem',
-                  cursor: 'pointer'
-                }}
-              >
-                🎤 Start Recording
-              </button>
-            ) : (
-              <button
-                type="button"
-                onClick={stopRecording}
-                style={{
-                  background: 'var(--color-error)',
-                  color: 'white',
-                  border: 'none',
-                  padding: '0.8rem 1.5rem',
-                  borderRadius: '999px',
-                  fontWeight: 800,
-                  cursor: 'pointer'
-                }}
-              >
-                🛑 Stop & Process
-              </button>
-            )}
-
-            {isTranscribing && <span style={{ fontWeight: 600 }}>Processing with Sarvam AI...</span>}
-          </div>
-
-          {transcript && (
-            <div style={{ background: 'white', padding: '1rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-primary-outline)' }}>
-              <span style={{ fontSize: '0.7rem', fontWeight: 800, color: 'var(--color-primary)', textTransform: 'uppercase' }}>Transcript</span>
-              <p style={{ margin: '0.5rem 0 0', fontSize: '0.95rem' }}>{transcript}</p>
-            </div>
-          )}
-        </section>
-
         <section className="card" style={{ display: 'grid', gap: '1.25rem' }}>
-          <div style={{ display: 'grid', gap: '0.35rem' }}>
+          <div style={{ display: 'grid', gap: '0.2rem' }}>
             <h2 style={{ fontSize: '1.1rem', fontWeight: 800, margin: 0 }}>Clinical Note (SOAP)</h2>
-            <p className="mobile-copy-optional" style={{ color: 'var(--color-text-muted)', margin: 0 }}>
-              These fields are auto-filled by the AI scribe above.
+            <p className="mobile-copy-optional" style={{ color: 'var(--color-text-muted)', margin: 0, fontSize: '0.88rem' }}>
+              {transcript ? 'Auto-filled from recording. Edit as needed.' : 'Filled automatically after recording.'}
             </p>
           </div>
-
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
             <div>
               <label>Subjective</label>
-              <textarea
-                value={soap.subjective}
-                onChange={e => setSoap({...soap, subjective: e.target.value})}
-                rows={4}
-                placeholder="Symptoms & history"
-              />
+              <textarea value={soap.subjective} onChange={e => setSoap({...soap, subjective: e.target.value})} rows={4} placeholder="Symptoms & history" />
             </div>
             <div>
               <label>Objective</label>
-              <textarea
-                value={soap.objective}
-                onChange={e => setSoap({...soap, objective: e.target.value})}
-                rows={4}
-                placeholder="Findings & vitals"
-              />
+              <textarea value={soap.objective} onChange={e => setSoap({...soap, objective: e.target.value})} rows={4} placeholder="Findings & vitals" />
             </div>
             <div>
               <label>Assessment</label>
-              <textarea
-                value={soap.assessment}
-                onChange={e => setSoap({...soap, assessment: e.target.value})}
-                rows={4}
-                placeholder="Evaluation"
-              />
+              <textarea value={soap.assessment} onChange={e => setSoap({...soap, assessment: e.target.value})} rows={4} placeholder="Evaluation" />
             </div>
             <div>
               <label>Plan</label>
-              <textarea
-                value={soap.plan}
-                onChange={e => setSoap({...soap, plan: e.target.value})}
-                rows={4}
-                placeholder="Next steps"
-              />
+              <textarea value={soap.plan} onChange={e => setSoap({...soap, plan: e.target.value})} rows={4} placeholder="Next steps" />
             </div>
           </div>
         </section>
 
-        <button 
+        <button
           type="submit"
           disabled={isSubmitting}
           style={{
@@ -652,10 +548,10 @@ export default function ConsultForm({ appointment, slug }: Props) {
             fontWeight: 800,
             fontSize: '1.1rem',
             boxShadow: 'var(--shadow-md)',
-            cursor: 'pointer'
+            cursor: isSubmitting ? 'not-allowed' : 'pointer',
           }}
         >
-          {isSubmitting ? 'Saving Record...' : 'Complete Consultation'}
+          {isSubmitting ? 'Saving Record…' : 'Complete Consultation'}
         </button>
       </form>
     </div>
