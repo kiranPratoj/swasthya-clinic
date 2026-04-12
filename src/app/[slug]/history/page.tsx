@@ -1,12 +1,16 @@
 import { getPatientHistory } from '@/app/actions';
 import type { Appointment } from '@/lib/types';
+import { verifyRole } from '@/lib/auth';
 
 export default async function HistoryPage({
+  params,
   searchParams,
 }: {
   params: Promise<{ slug: string }>;
   searchParams: Promise<{ phone?: string }>;
 }) {
+  const { slug } = await params;
+  await verifyRole(['admin', 'doctor'], slug);
   const { phone } = await searchParams;
   let appointments: Appointment[] = [];
   
@@ -19,8 +23,8 @@ export default async function HistoryPage({
   return (
     <div style={{ maxWidth: '800px', margin: '0 auto', paddingBottom: '4rem' }}>
       <header style={{ marginBottom: '2.5rem' }}>
-        <h1 style={{ fontSize: '1.75rem', fontWeight: 800, color: 'var(--color-text)', marginBottom: '0.5rem' }}>Patient History</h1>
-        <p style={{ color: 'var(--color-text-muted)', fontSize: '1rem' }}>Look up any patient&apos;s visit record</p>
+        <h1 style={{ fontSize: '1.75rem', fontWeight: 800, color: 'var(--color-text)', marginBottom: '0.5rem' }}>Detailed Patient History</h1>
+        <p className="mobile-copy-optional" style={{ color: 'var(--color-text-muted)', fontSize: '1rem' }}>Look up any patient&apos;s visit record</p>
       </header>
 
       <form method="GET" style={{ display: 'flex', gap: '0.75rem', marginBottom: '3rem', background: 'white', padding: '1.5rem', borderRadius: 'var(--radius-lg)', border: '1px solid var(--color-border)', boxShadow: 'var(--shadow-sm)' }}>
@@ -55,7 +59,7 @@ export default async function HistoryPage({
             <path d="M9 10h6" />
           </svg>
           <h3 style={{ fontSize: '1.25rem', fontWeight: 700, color: 'var(--color-text)', marginBottom: '0.5rem' }}>Start your search</h3>
-          <p style={{ color: 'var(--color-text-muted)' }}>Enter a 10-digit mobile number above to view visit history.</p>
+          <p className="mobile-copy-optional" style={{ color: 'var(--color-text-muted)' }}>Enter a 10-digit mobile number above to view visit history.</p>
         </div>
       )}
 

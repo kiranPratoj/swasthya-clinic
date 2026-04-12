@@ -1,5 +1,6 @@
 import { getAllPatients } from '@/app/actions';
 import PatientsClient from './PatientsClient';
+import { verifyRole } from '@/lib/auth';
 
 export default async function PatientsPage({
   params,
@@ -7,6 +8,7 @@ export default async function PatientsPage({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
+  await verifyRole(['admin', 'doctor', 'receptionist'], slug);
   const patients = await getAllPatients();
 
   return (

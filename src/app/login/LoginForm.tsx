@@ -35,8 +35,8 @@ export default function LoginForm({ searchParams }: Props) {
         return;
       }
 
-      // Redirect to intended page or clinic dashboard
-      const dest = next ?? `/${json.slug}/admin`;
+      // Default to the live queue, which is the V1 staff landing surface.
+      const dest = next ?? `/${json.slug}/queue`;
       router.push(dest);
       router.refresh();
     } catch {

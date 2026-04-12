@@ -24,13 +24,13 @@ export default function LoginPage({
             </div>
           </div>
           <p style={{ color: 'var(--color-text)', fontSize: '1.05rem', lineHeight: 1.7, maxWidth: '40rem' }}>
-            Use the staff console to register patients, manage the live queue, update settings, and move appointments from intake to consultation without breaking clinic flow.
+            Use the staff console to find patients by phone, create today&apos;s token, manage the live queue, and complete consultations without breaking clinic flow.
           </p>
           <div style={{ display: 'grid', gap: '0.8rem', maxWidth: '32rem' }}>
             {[
-              'Voice intake for reception desks',
-              'Realtime queue visibility for doctors',
-              'Patient-facing booking and token pages',
+              'Fast phone-first intake at the front desk',
+              'Live queue visibility for staff and doctors',
+              'Patient token and visit history pages',
             ].map((item) => (
               <div key={item} style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
                 <span style={{ width: '0.55rem', height: '0.55rem', borderRadius: '999px', background: 'var(--color-error)' }} />

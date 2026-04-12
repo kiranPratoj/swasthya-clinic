@@ -3,9 +3,8 @@
 import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
 import { createClient } from '@supabase/supabase-js';
-import { getClinicQueue, updateAppointmentStatus } from '@/app/actions';
+import { getClinicQueue, updateAppointmentStatus, updateAppointmentPayment } from '@/app/actions';
 import type { AppointmentStatus, QueueItem } from '@/lib/types';
-import AppointmentActions from './AppointmentActions';
 import AppointmentActionsMenu from './AppointmentActionsMenu';
 import NewPatientToast from './NewPatientToast';
 import QueueFilters from './QueueFilters';
@@ -14,6 +13,7 @@ type QueueDisplayProps = {
   initialQueue: QueueItem[];
   clinicId: string;
   slug: string;
+  role: 'admin' | 'doctor' | 'receptionist';
 };
 
 function formatDateLabel(date: Date): string {
@@ -36,8 +36,8 @@ function formatStatusLabel(status: AppointmentStatus): string {
   const labels: Record<AppointmentStatus, string> = {
     booked:      'Booked',
     confirmed:   'Waiting',
-    in_progress: 'In Progress',
-    completed:   'Done',
+    in_progress: 'In Consult',
+    completed:   'Completed',
     cancelled:   'Cancelled',
     no_show:     'No Show',
     rescheduled: 'Rescheduled',
@@ -82,7 +82,7 @@ function getActionConfig(status: AppointmentStatus): {
 } {
   if (status === 'in_progress') {
     return {
-      label: 'Consult Now',
+      label: 'Open Consult',
       nextStatus: null,
       background: 'var(--color-primary)',
       disabled: false,
@@ -108,7 +108,7 @@ function getActionConfig(status: AppointmentStatus): {
   }
 
   return {
-    label: 'Start Consulting',
+    label: 'Start Consult',
     nextStatus: 'in_progress',
     background: 'var(--color-primary)',
     disabled: false,
@@ -119,11 +119,13 @@ export default function QueueDisplay({
   initialQueue,
   clinicId,
   slug,
+  role,
 }: QueueDisplayProps) {
   const [queue, setQueue] = useState(initialQueue);
   const [filteredQueue, setFilteredQueue] = useState(initialQueue);
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [payingId, setPayingId] = useState<string | null>(null);
   const [toastQueue, setToastQueue] = useState<Array<{ id: string; token: number; name: string }>>([]);
   const queueRef = useRef(initialQueue);
 
@@ -273,6 +275,31 @@ export default function QueueDisplay({
     }
   }
 
+  async function handleMarkPaid(id: string, mode: 'cash' | 'upi') {
+    setPayingId(id);
+    setActionError(null);
+    try {
+      const result = await updateAppointmentPayment(id, mode, 'paid');
+      if (!result.persisted) {
+        setActionError('Payment could not be saved to the appointment yet. Apply the payment migration before the demo.');
+        return;
+      }
+      setQueue((current) =>
+        current.map((item) =>
+          item.id === id ? { ...item, payment_status: 'verified', payment_mode: mode } : item
+        )
+      );
+    } catch (error: unknown) {
+      setActionError(
+        error instanceof Error && error.message.trim()
+          ? error.message
+          : 'Could not update the payment.'
+      );
+    } finally {
+      setPayingId(null);
+    }
+  }
+
   const sortedQueue = [...filteredQueue].sort((left, right) => left.token_number - right.token_number);
   const todayLabel = formatDateLabel(new Date());
 
@@ -400,107 +427,83 @@ export default function QueueDisplay({
                     {item.token_number}
                   </div>
 
-                  {/* Patient Info - Wrapped in Link for Tapping */}
-                  <Link 
-                    href={`/${slug}/queue/${item.id}/consult`}
-                    style={{ 
-                      display: 'grid', 
-                      gap: '0.35rem', 
-                      textDecoration: 'none', 
-                      color: 'inherit',
-                      cursor: 'pointer'
-                    }}
-                  >
-                    <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'center', flexWrap: 'wrap' }}>
-                      <h2 style={{ fontSize: '1.2rem', fontWeight: 800 }}>
-                        {item.patient.name}
-                      </h2>
-                      {typeof item.patient.age === 'number' && (
-                        <span style={{ color: 'var(--color-text-muted)', fontWeight: 600, fontSize: '0.9rem' }}>
-                          Age {item.patient.age}
+                  {/* Patient Info — only doctor/admin can tap through to consult */}
+                  {role !== 'receptionist' ? (
+                    <Link
+                      href={`/${slug}/queue/${item.id}/consult`}
+                      style={{ display: 'grid', gap: '0.35rem', textDecoration: 'none', color: 'inherit', cursor: 'pointer' }}
+                    >
+                      <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                        <h2 style={{ fontSize: '1.2rem', fontWeight: 800 }}>{item.patient.name}</h2>
+                        {typeof item.patient.age === 'number' && (
+                          <span style={{ color: 'var(--color-text-muted)', fontWeight: 600, fontSize: '0.9rem' }}>Age {item.patient.age}</span>
+                        )}
+                      </div>
+                      <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', fontSize: '0.9rem' }}>
+                        <span style={{ color: 'var(--color-text-muted)', fontWeight: 600 }}>
+                          Wait: <span style={{ color: 'var(--color-primary)' }}>{waitTime}</span>
                         </span>
-                      )}
+                        <span style={{ color: 'var(--color-border)' }}>|</span>
+                        <p style={{ color: 'var(--color-text-muted)', margin: 0 }}>{item.complaint}</p>
+                      </div>
+                      <div style={{ display: 'flex', gap: '0.6rem', flexWrap: 'wrap', marginTop: '0.25rem' }}>
+                        <span style={{ display: 'inline-flex', alignItems: 'center', padding: '0.3rem 0.6rem', borderRadius: '999px', background: 'var(--color-primary-soft)', color: 'var(--color-primary)', fontSize: '0.75rem', fontWeight: 800 }}>
+                          {formatVisitType(item.visit_type)}
+                        </span>
+                        <span style={{ display: 'inline-flex', alignItems: 'center', padding: '0.3rem 0.6rem', borderRadius: '999px', background: item.status === 'in_progress' ? 'var(--color-warning-bg)' : item.status === 'completed' ? 'var(--color-success-bg)' : 'var(--color-primary-soft)', color: item.status === 'in_progress' ? 'var(--color-warning)' : item.status === 'completed' ? 'var(--color-success)' : 'var(--color-primary)', fontSize: '0.75rem', fontWeight: 800, textTransform: 'capitalize' }}>
+                          {formatStatusLabel(item.status)}
+                        </span>
+                      </div>
+                    </Link>
+                  ) : (
+                    <div style={{ display: 'grid', gap: '0.35rem' }}>
+                      <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                        <h2 style={{ fontSize: '1.2rem', fontWeight: 800 }}>{item.patient.name}</h2>
+                        {typeof item.patient.age === 'number' && (
+                          <span style={{ color: 'var(--color-text-muted)', fontWeight: 600, fontSize: '0.9rem' }}>Age {item.patient.age}</span>
+                        )}
+                      </div>
+                      <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', fontSize: '0.9rem' }}>
+                        <span style={{ color: 'var(--color-text-muted)', fontWeight: 600 }}>
+                          Wait: <span style={{ color: 'var(--color-primary)' }}>{waitTime}</span>
+                        </span>
+                        <span style={{ color: 'var(--color-border)' }}>|</span>
+                        <p style={{ color: 'var(--color-text-muted)', margin: 0 }}>{item.complaint}</p>
+                      </div>
+                      <div style={{ display: 'flex', gap: '0.6rem', flexWrap: 'wrap', marginTop: '0.25rem' }}>
+                        <span style={{ display: 'inline-flex', alignItems: 'center', padding: '0.3rem 0.6rem', borderRadius: '999px', background: 'var(--color-primary-soft)', color: 'var(--color-primary)', fontSize: '0.75rem', fontWeight: 800 }}>
+                          {formatVisitType(item.visit_type)}
+                        </span>
+                        <span style={{ display: 'inline-flex', alignItems: 'center', padding: '0.3rem 0.6rem', borderRadius: '999px', background: item.status === 'in_progress' ? 'var(--color-warning-bg)' : item.status === 'completed' ? 'var(--color-success-bg)' : 'var(--color-primary-soft)', color: item.status === 'in_progress' ? 'var(--color-warning)' : item.status === 'completed' ? 'var(--color-success)' : 'var(--color-primary)', fontSize: '0.75rem', fontWeight: 800, textTransform: 'capitalize' }}>
+                          {formatStatusLabel(item.status)}
+                        </span>
+                      </div>
                     </div>
-
-                    <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', fontSize: '0.9rem' }}>
-                      <span style={{ color: 'var(--color-text-muted)', fontWeight: 600 }}>
-                        Wait: <span style={{ color: 'var(--color-primary)' }}>{waitTime}</span>
-                      </span>
-                      <span style={{ color: 'var(--color-border)' }}>|</span>
-                      <p style={{ color: 'var(--color-text-muted)', margin: 0 }}>{item.complaint}</p>
-                    </div>
-
-                    <div style={{ display: 'flex', gap: '0.6rem', flexWrap: 'wrap', marginTop: '0.25rem' }}>
-                      <span
-                        style={{
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          padding: '0.3rem 0.6rem',
-                          borderRadius: '999px',
-                          background: 'var(--color-primary-soft)',
-                          color: 'var(--color-primary)',
-                          fontSize: '0.75rem',
-                          fontWeight: 800,
-                        }}
-                      >
-                        {formatVisitType(item.visit_type)}
-                      </span>
-                      <span
-                        style={{
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          padding: '0.3rem 0.6rem',
-                          borderRadius: '999px',
-                          background:
-                            item.status === 'in_progress'
-                              ? 'var(--color-warning-bg)'
-                              : item.status === 'completed'
-                                ? 'var(--color-success-bg)'
-                                : 'var(--color-primary-soft)',
-                          color:
-                            item.status === 'in_progress'
-                              ? 'var(--color-warning)'
-                              : item.status === 'completed'
-                                ? 'var(--color-success)'
-                                : 'var(--color-primary)',
-                          fontSize: '0.75rem',
-                          fontWeight: 800,
-                          textTransform: 'capitalize',
-                        }}
-                      >
-                        {formatStatusLabel(item.status)}
-                      </span>
-                    </div>
-                  </Link>
+                  )}
 
                   {/* Desktop Actions */}
-                  <div
-                    style={{
-                      display: 'grid',
-                      gap: '0.75rem',
-                      justifyItems: 'end',
-                    }}
-                  >
-                    <button
-                      type="button"
-                      disabled={action.disabled || isPending}
-                      onClick={() => void handleStatusChange(item)}
-                      style={{
-                        border: 'none',
-                        borderRadius: 'var(--radius-md)',
-                        padding: '0.8rem 1.25rem',
-                        minWidth: '10rem',
-                        background: action.background,
-                        color: 'white',
-                        fontWeight: 800,
-                        fontSize: '0.95rem',
-                        opacity: action.disabled ? 0.8 : 1,
-                        boxShadow: 'var(--shadow-sm)',
-                        cursor: action.disabled ? 'not-allowed' : 'pointer',
-                      }}
-                    >
-                      {isPending ? 'Updating...' : action.label}
-                    </button>
+                  <div style={{ display: 'grid', gap: '0.75rem', justifyItems: 'end' }}>
+                    {/* Receptionist never gets an action button — only a status badge */}
+                    {role === 'receptionist' ? (
+                      <span style={{
+                        display: 'inline-flex', alignItems: 'center', padding: '0.5rem 1rem',
+                        borderRadius: 'var(--radius-md)', fontWeight: 800, fontSize: '0.85rem',
+                        minWidth: '10rem', justifyContent: 'center',
+                        background: item.status === 'in_progress' ? 'var(--color-warning-bg)' : item.status === 'completed' ? 'var(--color-success-bg)' : 'var(--color-primary-soft)',
+                        color: item.status === 'in_progress' ? 'var(--color-warning)' : item.status === 'completed' ? 'var(--color-success)' : 'var(--color-primary)',
+                      }}>
+                        {formatStatusLabel(item.status)}
+                      </span>
+                    ) : (
+                      <button
+                        type="button"
+                        disabled={action.disabled || isPending}
+                        onClick={() => void handleStatusChange(item)}
+                        style={{ border: 'none', borderRadius: 'var(--radius-md)', padding: '0.8rem 1.25rem', minWidth: '10rem', background: action.background, color: 'white', fontWeight: 800, fontSize: '0.95rem', opacity: action.disabled ? 0.8 : 1, boxShadow: 'var(--shadow-sm)', cursor: action.disabled ? 'not-allowed' : 'pointer' }}
+                      >
+                        {isPending ? 'Updating...' : action.label}
+                      </button>
+                    )}
 
                     <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
                       {item.status !== 'completed' && (
@@ -510,10 +513,35 @@ export default function QueueDisplay({
                           patientName={item.patient.name}
                         />
                       )}
-                      <AppointmentActions appointmentId={item.id} />
                     </div>
                   </div>
                 </div>
+
+                {/* Payment row — receptionist marks payment after consult completes */}
+                {item.status === 'completed' && (
+                  <div style={{ borderTop: '1px solid var(--color-bg)', paddingTop: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+                    {item.payment_status === 'verified' ? (
+                      <span style={{ fontSize: '0.8rem', fontWeight: 800, color: 'var(--color-success)', background: 'var(--color-success-bg)', padding: '0.3rem 0.75rem', borderRadius: '999px' }}>
+                        Paid · {item.payment_mode === 'upi' ? 'UPI' : 'Cash'}
+                      </span>
+                    ) : (
+                      <>
+                        <span style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--color-text-muted)' }}>Mark paid:</span>
+                        {(['cash', 'upi'] as const).map((mode) => (
+                          <button
+                            key={mode}
+                            type="button"
+                            disabled={payingId === item.id}
+                            onClick={() => void handleMarkPaid(item.id, mode)}
+                            style={{ padding: '0.35rem 0.85rem', borderRadius: '999px', border: '1px solid var(--color-border)', background: 'white', color: 'var(--color-primary)', fontWeight: 800, fontSize: '0.8rem', cursor: 'pointer' }}
+                          >
+                            {payingId === item.id ? '...' : mode === 'cash' ? 'Cash' : 'UPI'}
+                          </button>
+                        ))}
+                      </>
+                    )}
+                  </div>
+                )}
               </article>
             );
           })}

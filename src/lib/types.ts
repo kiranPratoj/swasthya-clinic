@@ -81,6 +81,7 @@ export type Appointment = {
   booked_for: string;
   created_at: string;
   patient?: Patient;
+  payment_mode?: 'cash' | 'upi' | null;
   payment_utr: string | null;
   payment_amount: number | null;
   payment_status: 'pending' | 'verified' | 'failed';
@@ -179,6 +180,7 @@ export type OnboardingInput = {
 
 export type QueueItem = Appointment & {
   patient: Patient;
+  doctor?: Doctor | null;
 };
 
 // ─── Patient lookup (phone search result) ────────────────────────────────────

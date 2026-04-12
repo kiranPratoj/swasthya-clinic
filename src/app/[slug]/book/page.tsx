@@ -65,7 +65,7 @@ export default async function PatientBookingPage({
           )}
         </div>
 
-        <BookingForm doctorId={doctor.id} slug={slug} clinicName={clinic?.name ?? 'Clinic'} />
+        <BookingForm doctorId={doctor.id} doctorName={doctor.name} slug={slug} clinicName={clinic?.name ?? 'Clinic'} />
       </div>
     </main>
   );

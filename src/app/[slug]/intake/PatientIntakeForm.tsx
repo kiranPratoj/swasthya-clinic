@@ -1,7 +1,6 @@
 'use client';
 
-import { FormEvent, useEffect, useRef, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { FormEvent, useCallback, useEffect, useRef, useState } from 'react';
 import { createAppointment } from '@/app/actions';
 import { synthesizeKannadaSpeech } from '@/lib/ttsAdapter';
 import type { PatientIntakeDraft, VisitType, VoiceDraft } from '@/lib/types';
@@ -57,9 +56,25 @@ const EMPTY_DRAFT: PatientIntakeDraft = {
 
 type PatientIntakeFormProps = {
   doctorId: string;
-  slug: string;
   mockMode?: boolean;
 };
+
+function MicIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M12 15a3 3 0 0 0 3-3V7a3 3 0 1 0-6 0v5a3 3 0 0 0 3 3Z" fill="currentColor" />
+      <path d="M19 11a7 7 0 0 1-14 0M12 18v3M8 21h8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function StopIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <rect x="6.5" y="6.5" width="11" height="11" rx="2.5" fill="currentColor" />
+    </svg>
+  );
+}
 
 function getTodayIsoDate(): string {
   const now = new Date();
@@ -94,17 +109,18 @@ function dedupeTranscript(current: string, nextChunk: string): string {
 
 export default function PatientIntakeForm({
   doctorId,
-  slug,
   mockMode = false,
 }: PatientIntakeFormProps) {
-  const router = useRouter();
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
   const recordedChunksRef = useRef<Blob[]>([]);
   const stageTimersRef = useRef<number[]>([]);
   const recordingStartTimeRef = useRef<number>(0);
+  const autofillFlashTimerRef = useRef<number | null>(null);
 
   const [patientName, setPatientName] = useState('');
+  const [selectedPatientId, setSelectedPatientId] = useState('');
+  const [allowSharedMobileNewPatient, setAllowSharedMobileNewPatient] = useState(false);
   const [age, setAge] = useState('');
   const [phone, setPhone] = useState('');
   const [complaint, setComplaint] = useState('');
@@ -119,10 +135,9 @@ export default function PatientIntakeForm({
   const [voiceError, setVoiceError] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [confirmedToken, setConfirmedToken] = useState<number | null>(null);
-
-  const [isParsingReceipt, setIsParsingReceipt] = useState(false);
-  const [receiptUtr, setReceiptUtr] = useState('');
-  const [receiptAmount, setReceiptAmount] = useState('');
+  const [autoFilledFlash, setAutoFilledFlash] = useState(false);
+  const [detailsStepVisible, setDetailsStepVisible] = useState(false);
+  const [detailsStepLabel, setDetailsStepLabel] = useState<'new' | 'existing' | 'shared-mobile'>('new');
 
   const bookedFor = getTodayIsoDate();
   const missingFields = voiceDraft?.structuredData.missingFields ?? [];
@@ -162,11 +177,27 @@ export default function PatientIntakeForm({
   }
 
   function applyStructuredData(structuredData: PatientIntakeDraft) {
-    setPatientName((current) => structuredData.patientName ?? current);
-    setAge((current) => structuredData.age ?? current);
-    setPhone((current) => structuredData.phone ?? current);
+    setPatientName((current) =>
+      selectedPatientId ? current : structuredData.patientName ?? current
+    );
+    setAge((current) =>
+      selectedPatientId ? current : structuredData.age ?? current
+    );
+    setPhone((current) =>
+      selectedPatientId ? current : structuredData.phone ?? current
+    );
     setComplaint((current) => structuredData.complaint ?? current);
     setVisitType((current) => structuredData.visitType ?? current);
+
+    if (autofillFlashTimerRef.current !== null) {
+      window.clearTimeout(autofillFlashTimerRef.current);
+    }
+
+    setAutoFilledFlash(true);
+    autofillFlashTimerRef.current = window.setTimeout(() => {
+      setAutoFilledFlash(false);
+      autofillFlashTimerRef.current = null;
+    }, 1400);
   }
 
   async function playReadySpeech() {
@@ -370,6 +401,7 @@ export default function PatientIntakeForm({
     formData.set('visitType', visitType);
     formData.set('doctorId', doctorId);
     formData.set('bookedFor', bookedFor);
+    formData.set('allowSharedMobileNewPatient', allowSharedMobileNewPatient ? 'true' : 'false');
 
     try {
       const result = await createAppointment(formData);
@@ -383,6 +415,9 @@ export default function PatientIntakeForm({
   useEffect(() => {
     return () => {
       clearStageTimers();
+      if (autofillFlashTimerRef.current !== null) {
+        window.clearTimeout(autofillFlashTimerRef.current);
+      }
       if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
         mediaRecorderRef.current.stop();
       }
@@ -391,40 +426,18 @@ export default function PatientIntakeForm({
   }, []);
 
   const activeProcessingStep = PROCESSING_STEPS[processingStep];
-
-  const handleReceiptUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    setIsParsingReceipt(true);
-    setSubmitError(null);
-
-    const formData = new FormData();
-    formData.append('image', file);
-
-    try {
-      const response = await fetch('/api/parse-receipt', {
-        method: 'POST',
-        body: formData,
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Failed to parse receipt.');
-      }
-
-      if (data.utr_number) setReceiptUtr(data.utr_number);
-      if (data.amount) setReceiptAmount(data.amount.toString());
-    } catch (error: unknown) {
-      setSubmitError(getErrorMessage(error));
-    } finally {
-      setIsParsingReceipt(false);
-    }
-  };
+  const transcriptWords = liveTranscript.trim() ? liveTranscript.trim().split(/\s+/) : [];
+  const pendingChunk = isRecording
+    ? transcriptWords.slice(-2).join(' ')
+    : '';
+  const confirmedTranscript = pendingChunk
+    ? transcriptWords.slice(0, -2).join(' ')
+    : liveTranscript.trim();
 
   function resetForm() {
     setPatientName('');
+    setSelectedPatientId('');
+    setAllowSharedMobileNewPatient(false);
     setAge('');
     setPhone('');
     setComplaint('');
@@ -434,7 +447,54 @@ export default function PatientIntakeForm({
     setVoiceError(null);
     setSubmitError(null);
     setConfirmedToken(null);
+    setDetailsStepVisible(false);
+    setDetailsStepLabel('new');
   }
+
+  const handleExistingPatientFound = useCallback(
+    (data: { id: string; name: string; phone: string; age: string } | null) => {
+      if (data === null) {
+        setPatientName('');
+        setSelectedPatientId('');
+        setAllowSharedMobileNewPatient(false);
+        setAge('');
+        setPhone('');
+        setComplaint('');
+        setVisitType('walk-in');
+        setDetailsStepVisible(false);
+        setDetailsStepLabel('new');
+        return;
+      }
+
+      setPatientName(data.name);
+      setSelectedPatientId(data.id);
+      setAllowSharedMobileNewPatient(false);
+      setAge(data.age);
+      setPhone(data.phone);
+      setComplaint('');
+      setVisitType('walk-in');
+      setSubmitError(null);
+      setDetailsStepVisible(true);
+      setDetailsStepLabel('existing');
+    },
+    []
+  );
+
+  const handleCreateNewPatient = useCallback((
+    lookupPhone: string,
+    options?: { allowSharedMobile?: boolean }
+  ) => {
+    setPatientName('');
+    setSelectedPatientId('');
+    setAllowSharedMobileNewPatient(Boolean(options?.allowSharedMobile));
+    setAge('');
+    setPhone(lookupPhone);
+    setComplaint('');
+    setVisitType('walk-in');
+    setSubmitError(null);
+    setDetailsStepVisible(true);
+    setDetailsStepLabel(options?.allowSharedMobile ? 'shared-mobile' : 'new');
+  }, []);
 
   if (confirmedToken !== null) {
     return (
@@ -470,7 +530,7 @@ export default function PatientIntakeForm({
           Token #{confirmedToken} — Patient registered
         </h2>
         <p style={{ color: '#15803d' }}>
-          The appointment has been created and added to today&apos;s queue.
+          The token has been created and added to today&apos;s queue.
         </p>
         <button
           type="button"
@@ -509,441 +569,566 @@ export default function PatientIntakeForm({
           border: '1px solid var(--color-border)',
           boxShadow: 'var(--shadow-sm)',
           padding: '1.5rem',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '1rem',
-        }}
-      >
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
-          <h2 style={{ fontSize: '1.25rem', fontWeight: 800 }}>Voice Intake</h2>
-          <p style={{ color: 'var(--color-text-muted)' }}>
-            Record the patient details, then confirm the extracted fields before creating the appointment token.
-          </p>
-        </div>
-
-        {mockMode && (
-          <div
-            style={{
-              background: 'var(--color-warning-bg)',
-              padding: '0.75rem 1rem',
-              borderRadius: 'var(--radius-md)',
-              fontSize: '0.85rem',
-              fontWeight: 800,
-              color: 'var(--color-warning)',
-              border: '1px solid var(--color-warning)',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.5rem',
-            }}
-          >
-            <span>⚠️</span>
-            <span>MOCK MODE ACTIVE — Voice extraction is disabled because SARVAM_API_KEY is missing.</span>
-          </div>
-        )}
-
-        <div
-          style={{
-            display: 'flex',
-            flexWrap: 'wrap',
-            gap: '0.75rem',
-            alignItems: 'center',
-          }}
-        >
-          <button
-            type="button"
-            onClick={isRecording ? stopRecording : () => void startRecording()}
-            disabled={mockMode || isProcessingVoice || isSubmitting}
-            style={{
-              border: 'none',
-              borderRadius: '999px',
-              padding: '0.95rem 1.4rem',
-              fontSize: '0.95rem',
-              fontWeight: 800,
-              background: isRecording ? 'var(--color-error)' : 'var(--color-primary)',
-              color: 'white',
-              boxShadow: 'var(--shadow-sm)',
-              minWidth: '11rem',
-            }}
-          >
-            {isRecording ? 'Stop Recording' : 'Tap to Speak'}
-          </button>
-
-          <span
-            style={{
-              color: isRecording ? 'var(--color-error)' : 'var(--color-text-muted)',
-              fontWeight: 600,
-            }}
-          >
-            {isRecording
-              ? 'Recording live preview...'
-              : 'Kannada or English speech supported.'}
-          </span>
-        </div>
-
-        {isRecording && (
-          <div
-            style={{
-              background: '#fff7ed',
-              border: '1px solid #fdba74',
-              borderRadius: 'var(--radius-lg)',
-              padding: '1rem',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '0.45rem',
-            }}
-          >
-            <span
-              style={{
-                fontSize: '0.78rem',
-                fontWeight: 800,
-                color: '#c2410c',
-                letterSpacing: '0.08em',
-                textTransform: 'uppercase',
-              }}
-            >
-              Live Transcript
-            </span>
-            <p style={{ color: '#9a3412', minHeight: '3.5rem' }}>
-              {liveTranscript || 'Listening... / ಕೇಳಲಾಗುತ್ತಿದೆ...'}
-            </p>
-          </div>
-        )}
-
-        {isProcessingVoice && (
-          <div
-            style={{
-              background: 'var(--color-primary-soft)',
-              border: '1px solid var(--color-primary-outline)',
-              borderRadius: 'var(--radius-lg)',
-              padding: '1rem',
-              display: 'grid',
-              gap: '0.85rem',
-            }}
-          >
-            <div>
-              <p style={{ fontWeight: 800, color: 'var(--color-primary)' }}>
-                {activeProcessingStep.english}
-              </p>
-              <p style={{ color: 'var(--color-text-muted)', fontSize: '0.95rem' }}>
-                {activeProcessingStep.kannada}
-              </p>
-            </div>
-
-            <div style={{ display: 'grid', gap: '0.65rem' }}>
-              {PROCESSING_STEPS.map((step, index) => {
-                const isActive = index === processingStep;
-                const isComplete = index < processingStep;
-
-                return (
-                  <div
-                    key={step.english}
-                    style={{
-                      display: 'grid',
-                      gridTemplateColumns: '1.4rem 1fr',
-                      gap: '0.75rem',
-                      alignItems: 'center',
-                    }}
-                  >
-                    <span
-                      style={{
-                        width: '1.1rem',
-                        height: '1.1rem',
-                        borderRadius: '999px',
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        background: isComplete
-                          ? 'var(--color-accent)'
-                          : isActive
-                            ? 'var(--color-gold)'
-                            : 'white',
-                        color: isComplete || isActive ? 'white' : 'var(--color-text-muted)',
-                        border: isComplete || isActive ? 'none' : '1px solid var(--color-border)',
-                        fontSize: '0.72rem',
-                        fontWeight: 800,
-                      }}
-                    >
-                      {isComplete ? '✓' : index + 1}
-                    </span>
-                    <div>
-                      <p style={{ fontWeight: 700 }}>{step.english}</p>
-                      <p style={{ color: 'var(--color-text-muted)', fontSize: '0.88rem' }}>
-                        {step.kannada}
-                      </p>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
-        {voiceDraft?.status === 'ready' && voiceDraft.transcript && (
-          <div
-            style={{
-              background: '#f0fdf4',
-              border: '1px solid #86efac',
-              borderRadius: 'var(--radius-lg)',
-              padding: '1rem',
-              display: 'grid',
-              gap: '0.45rem',
-            }}
-          >
-            <span
-              style={{
-                fontSize: '0.78rem',
-                fontWeight: 800,
-                color: 'var(--color-success)',
-                letterSpacing: '0.08em',
-                textTransform: 'uppercase',
-              }}
-            >
-              Extracted Transcript
-            </span>
-            <p style={{ color: '#166534' }}>{voiceDraft.transcript}</p>
-          </div>
-        )}
-
-        {voiceDraft?.status === 'ready' && voiceDraft.structuredData.summary && (
-          <div
-            style={{
-              background: 'white',
-              border: '1px solid var(--color-border)',
-              borderRadius: 'var(--radius-lg)',
-              padding: '1rem',
-            }}
-          >
-            <p style={{ fontSize: '0.78rem', fontWeight: 800, color: 'var(--color-text-muted)', marginBottom: '0.35rem' }}>
-              Intake Summary
-            </p>
-            <p>{voiceDraft.structuredData.summary}</p>
-          </div>
-        )}
-
-        {missingFields.length > 0 && (
-          <div
-            style={{
-              background: 'var(--color-warning-bg)',
-              border: '1px solid #fcd34d',
-              borderRadius: 'var(--radius-lg)',
-              padding: '1rem',
-              display: 'grid',
-              gap: '0.55rem',
-            }}
-          >
-            <p style={{ fontWeight: 800, color: 'var(--color-warning)' }}>
-              Missing fields need confirmation
-            </p>
-            <p style={{ color: '#92400e' }}>
-              ದಯವಿಟ್ಟು ಕೆಳಗಿನ ವಿವರಗಳನ್ನು ಕೈಯಾರೆ ಪರಿಶೀಲಿಸಿ ಮತ್ತು ಪೂರ್ಣಗೊಳಿಸಿ.
-            </p>
-            <p style={{ color: '#92400e', fontWeight: 600 }}>
-              {missingFields
-                .map((field) => `${field} / ${MISSING_FIELD_TRANSLATIONS[field] ?? field}`)
-                .join(', ')}
-            </p>
-          </div>
-        )}
-
-        {voiceError && (
-          <div
-            style={{
-              background: 'var(--color-error-bg)',
-              border: '1px solid #fca5a5',
-              borderRadius: 'var(--radius-lg)',
-              padding: '0.9rem 1rem',
-              color: 'var(--color-error)',
-              fontWeight: 600,
-            }}
-          >
-            {voiceError}
-          </div>
-        )}
-      </section>
-
-      <div className="input-safe-area">
-      <form
-        onSubmit={handleSubmit}
-        style={{
-          background: 'white',
-          borderRadius: 'var(--radius-xl)',
-          border: '1px solid var(--color-border)',
-          boxShadow: 'var(--shadow-sm)',
-          padding: '1.5rem',
           display: 'grid',
           gap: '1.25rem',
         }}
       >
-        <div style={{ display: 'grid', gap: '0.35rem' }}>
-          <h2 style={{ fontSize: '1.25rem', fontWeight: 800 }}>Patient Details</h2>
-          <p style={{ color: 'var(--color-text-muted)' }}>
-            Review the voice draft and update anything the receptionist wants to correct.
+        <div style={{ display: 'grid', gap: '0.25rem' }}>
+          <p
+            style={{
+              margin: 0,
+              fontSize: '0.78rem',
+              fontWeight: 800,
+              letterSpacing: '0.08em',
+              textTransform: 'uppercase',
+              color: 'var(--color-accent)',
+            }}
+          >
+            Step 1
+          </p>
+          <h2 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 800 }}>Find Patient</h2>
+          <p
+            className="mobile-copy-optional"
+            style={{ margin: 0, color: 'var(--color-text-muted)', fontSize: '0.95rem' }}
+          >
+            Search by mobile number first.
           </p>
         </div>
 
         <PatientLookup
-          onPatientFound={({ name, phone: nextPhone, age: nextAge }) => {
-            if (name) {
-              setPatientName(name);
-            }
-
-            if (nextAge) {
-              setAge(nextAge);
-            }
-
-            setPhone(nextPhone);
-          }}
+          onPatientFound={handleExistingPatientFound}
+          onCreateNewPatient={handleCreateNewPatient}
         />
+      </section>
 
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
-            gap: '1rem',
-          }}
-        >
-          <div>
-            <label htmlFor="patientName">Patient Name</label>
-            <input
-              id="patientName"
-              name="patientName"
-              type="text"
-              value={patientName}
-              onChange={(event) => setPatientName(event.target.value)}
-              required
-              placeholder="Enter patient name"
-            />
-          </div>
-
-          <div>
-            <label htmlFor="age">Age</label>
-            <input
-              id="age"
-              name="age"
-              type="number"
-              min="0"
-              inputMode="numeric"
-              value={age}
-              onChange={(event) => setAge(event.target.value)}
-              placeholder="Optional"
-            />
-          </div>
-
-          <div>
-            <label htmlFor="phone">Phone</label>
-            <input
-              id="phone"
-              name="phone"
-              type="tel"
-              value={phone}
-              onChange={(event) => setPhone(event.target.value)}
-              required
-              placeholder="10-digit phone number"
-            />
-          </div>
-
-          <div>
-            <label htmlFor="visitType">Visit Type</label>
-            <select
-              id="visitType"
-              name="visitType"
-              value={visitType}
-              onChange={(event) => setVisitType(event.target.value as VisitType)}
-            >
-              {VISIT_TYPE_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
-
-        <div>
-          <label htmlFor="complaint">Complaint</label>
-          <textarea
-            id="complaint"
-            name="complaint"
-            rows={5}
-            value={complaint}
-            onChange={(event) => setComplaint(event.target.value)}
-            required
-            placeholder="Describe the chief complaint"
-            style={{ resize: 'vertical' }}
-          />
-        </div>
-
-        <div style={{ padding: '1.25rem', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-lg)', background: 'var(--color-bg-soft)', display: 'grid', gap: '1rem' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <h3 style={{ fontSize: '1.1rem', fontWeight: 800 }}>Payment Details</h3>
-            <label style={{ cursor: 'pointer', padding: '0.5rem 1rem', background: 'var(--color-primary-soft)', color: 'var(--color-primary)', borderRadius: 'var(--radius-md)', fontWeight: 700, fontSize: '0.85rem' }}>
-              {isParsingReceipt ? 'Scanning...' : '📷 Scan UPI Receipt'}
-              <input type="file" accept="image/*" capture="environment" onChange={handleReceiptUpload} style={{ display: 'none' }} disabled={isParsingReceipt} />
-            </label>
-          </div>
-          
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-            <div>
-              <label htmlFor="payment_utr">UTR Number</label>
-              <input id="payment_utr" name="payment_utr" type="text" value={receiptUtr} onChange={(e) => setReceiptUtr(e.target.value)} placeholder="e.g. 412345678901" />
-            </div>
-            <div>
-              <label htmlFor="payment_amount">Amount (₹)</label>
-              <input id="payment_amount" name="payment_amount" type="number" min="0" step="0.01" value={receiptAmount} onChange={(e) => setReceiptAmount(e.target.value)} placeholder="e.g. 500.00" />
-            </div>
-          </div>
-        </div>
-
-        <input type="hidden" name="doctorId" value={doctorId} />
-        <input type="hidden" name="bookedFor" value={bookedFor} />
-
-        {submitError && (
-          <div
+      {detailsStepVisible && (
+        <div className="input-safe-area">
+          <form
+            onSubmit={handleSubmit}
             style={{
-              background: 'var(--color-error-bg)',
-              border: '1px solid #fca5a5',
-              borderRadius: 'var(--radius-lg)',
-              padding: '0.9rem 1rem',
-              color: 'var(--color-error)',
-              fontWeight: 600,
-            }}
-          >
-            {submitError}
-          </div>
-        )}
-
-        <div
-          style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            gap: '1rem',
-            flexWrap: 'wrap',
-          }}
-        >
-          <div style={{ color: 'var(--color-text-muted)', fontSize: '0.92rem' }}>
-            Appointment date: <strong style={{ color: 'var(--color-text)' }}>{bookedFor}</strong>
-          </div>
-
-          <button
-            type="submit"
-            disabled={isSubmitting || isProcessingVoice}
-            style={{
-              border: 'none',
-              borderRadius: 'var(--radius-md)',
-              padding: '0.95rem 1.4rem',
-              background: 'var(--color-accent)',
-              color: 'white',
-              fontWeight: 800,
-              minWidth: '12rem',
+              background: 'white',
+              borderRadius: 'var(--radius-xl)',
+              border: '1px solid var(--color-border)',
               boxShadow: 'var(--shadow-sm)',
+              padding: '1.5rem',
+              display: 'grid',
+              gap: '1.25rem',
             }}
           >
-            {isSubmitting ? 'Creating Token...' : 'Create Appointment'}
-          </button>
+            <div style={{ display: 'grid', gap: '0.25rem' }}>
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  gap: '1rem',
+                  flexWrap: 'wrap',
+                  alignItems: 'end',
+                }}
+              >
+                <div style={{ display: 'grid', gap: '0.25rem' }}>
+                  <p
+                    style={{
+                      margin: 0,
+                      fontSize: '0.78rem',
+                      fontWeight: 800,
+                      letterSpacing: '0.08em',
+                      textTransform: 'uppercase',
+                      color: 'var(--color-accent)',
+                    }}
+                  >
+                    Step 2
+                  </p>
+                  <h2 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 800 }}>
+                    {detailsStepLabel === 'existing'
+                      ? 'Confirm Visit Details'
+                      : detailsStepLabel === 'shared-mobile'
+                        ? 'Create New Family Patient'
+                        : 'Create New Patient'}
+                  </h2>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDetailsStepVisible(false);
+                    setSelectedPatientId('');
+                    setAllowSharedMobileNewPatient(false);
+                    setDetailsStepLabel('new');
+                  }}
+                  style={{
+                    border: '1px solid var(--color-border)',
+                    borderRadius: 'var(--radius-md)',
+                    background: 'white',
+                    color: 'var(--color-text)',
+                    padding: '0.7rem 1rem',
+                    fontWeight: 700,
+                  }}
+                >
+                  Change Number
+                </button>
+              </div>
+            </div>
+
+            <div
+              style={{
+                background: 'var(--color-bg)',
+                borderRadius: 'var(--radius-lg)',
+                border: '1px solid var(--color-border)',
+                padding: '1rem',
+                display: 'grid',
+                gap: '1rem',
+              }}
+            >
+              {detailsStepLabel === 'shared-mobile' && (
+                <div
+                  style={{
+                    background: 'white',
+                    border: '1px solid var(--color-primary-outline)',
+                    borderRadius: 'var(--radius-md)',
+                    padding: '0.75rem 0.9rem',
+                    color: 'var(--color-primary)',
+                    fontWeight: 700,
+                  }}
+                >
+                  Creating a new patient with an existing family mobile number.
+                </div>
+              )}
+
+              <div
+                style={{
+                  display: 'flex',
+                  flexWrap: 'wrap',
+                  gap: '0.75rem',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                }}
+              >
+                <div style={{ display: 'grid', gap: '0.2rem' }}>
+                  <p
+                    style={{
+                      margin: 0,
+                      fontSize: '0.78rem',
+                      fontWeight: 800,
+                      letterSpacing: '0.08em',
+                      textTransform: 'uppercase',
+                      color: 'var(--color-accent)',
+                    }}
+                  >
+                    Voice First
+                  </p>
+                  <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 800 }}>Voice Assist</h3>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={isRecording ? stopRecording : () => void startRecording()}
+                  disabled={mockMode || isProcessingVoice || isSubmitting}
+                  className={isRecording ? 'intake-record-button intake-record-button-recording' : 'intake-record-button'}
+                  style={{
+                    borderRadius: '999px',
+                    padding: '0.95rem 1.4rem',
+                    fontSize: '0.95rem',
+                    fontWeight: 800,
+                    minWidth: '11rem',
+                  }}
+                >
+                  <span className="intake-record-button-inner">
+                    {isRecording ? <StopIcon /> : <MicIcon />}
+                    <span>{isRecording ? 'Stop Recording' : 'Tap to Speak'}</span>
+                  </span>
+                </button>
+              </div>
+
+              {mockMode && (
+                <div
+                  style={{
+                    background: 'var(--color-warning-bg)',
+                    padding: '0.75rem 1rem',
+                    borderRadius: 'var(--radius-md)',
+                    fontSize: '0.85rem',
+                    fontWeight: 800,
+                    color: 'var(--color-warning)',
+                    border: '1px solid var(--color-warning)',
+                  }}
+                >
+                  Mock mode active. Voice extraction is unavailable.
+                </div>
+              )}
+
+              <span
+                className="intake-voice-helper mobile-copy-optional"
+                style={{
+                  color: isRecording ? 'var(--color-error)' : 'var(--color-text-muted)',
+                  fontWeight: 600,
+                }}
+              >
+                {isRecording ? 'Recording live preview...' : 'Kannada or English speech supported.'}
+              </span>
+
+              {!isRecording && !isProcessingVoice && !voiceDraft && (
+                <p className="intake-hint-text">
+                  Say: patient name, age, phone number, and symptoms.
+                </p>
+              )}
+
+              {isRecording && (
+                <div
+                  className="intake-transcript-panel"
+                  style={{
+                    background: '#fff7ed',
+                    border: '1px solid #fdba74',
+                    borderRadius: 'var(--radius-lg)',
+                    padding: '1rem',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '0.45rem',
+                  }}
+                >
+                  <span
+                    style={{
+                      fontSize: '0.78rem',
+                      fontWeight: 800,
+                      color: '#c2410c',
+                      letterSpacing: '0.08em',
+                      textTransform: 'uppercase',
+                    }}
+                  >
+                    Live Transcript
+                  </span>
+                  <p style={{ color: '#9a3412', minHeight: '3.5rem' }}>
+                    {liveTranscript ? (
+                      <>
+                        {confirmedTranscript && <span>{confirmedTranscript} </span>}
+                        {pendingChunk && <span className="intake-pending-chunk">{pendingChunk}</span>}
+                      </>
+                    ) : (
+                      'Listening... / ಕೇಳಲಾಗುತ್ತಿದೆ...'
+                    )}
+                  </p>
+                </div>
+              )}
+
+              {isProcessingVoice && (
+                <div
+                  className="intake-extracting-panel"
+                  style={{
+                    background: 'var(--color-primary-soft)',
+                    border: '1px solid var(--color-primary-outline)',
+                    borderRadius: 'var(--radius-lg)',
+                    padding: '1rem',
+                    display: 'grid',
+                    gap: '0.85rem',
+                  }}
+                >
+                  <div>
+                    <p style={{ fontWeight: 800, color: 'var(--color-primary)' }}>
+                      {activeProcessingStep.english}
+                    </p>
+                    <p style={{ color: 'var(--color-text-muted)', fontSize: '0.95rem' }}>
+                      {activeProcessingStep.kannada}
+                    </p>
+                  </div>
+
+                  <div style={{ display: 'grid', gap: '0.65rem' }}>
+                    {PROCESSING_STEPS.map((step, index) => {
+                      const isActive = index === processingStep;
+                      const isComplete = index < processingStep;
+
+                      return (
+                        <div
+                          key={step.english}
+                          style={{
+                            display: 'grid',
+                            gridTemplateColumns: '1.4rem 1fr',
+                            gap: '0.75rem',
+                            alignItems: 'center',
+                          }}
+                        >
+                          <span
+                            style={{
+                              width: '1.1rem',
+                              height: '1.1rem',
+                              borderRadius: '999px',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              background: isComplete
+                                ? 'var(--color-accent)'
+                                : isActive
+                                  ? 'var(--color-gold)'
+                                  : 'white',
+                              color: isComplete || isActive ? 'white' : 'var(--color-text-muted)',
+                              border: isComplete || isActive ? 'none' : '1px solid var(--color-border)',
+                              fontSize: '0.72rem',
+                              fontWeight: 800,
+                            }}
+                          >
+                            {isComplete ? '✓' : index + 1}
+                          </span>
+                          <div>
+                            <p style={{ fontWeight: 700 }}>{step.english}</p>
+                            <p style={{ color: 'var(--color-text-muted)', fontSize: '0.88rem' }}>
+                              {step.kannada}
+                            </p>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {voiceDraft?.status === 'ready' && voiceDraft.transcript && (
+                <div
+                  style={{
+                    background: '#f0fdf4',
+                    border: '1px solid #86efac',
+                    borderRadius: 'var(--radius-lg)',
+                    padding: '1rem',
+                    display: 'grid',
+                    gap: '0.45rem',
+                  }}
+                >
+                  <span
+                    style={{
+                      fontSize: '0.78rem',
+                      fontWeight: 800,
+                      color: 'var(--color-success)',
+                      letterSpacing: '0.08em',
+                      textTransform: 'uppercase',
+                    }}
+                  >
+                    Extracted Transcript
+                  </span>
+                  <p style={{ color: '#166534' }}>{voiceDraft.transcript}</p>
+                </div>
+              )}
+
+              {voiceDraft?.status === 'ready' && voiceDraft.structuredData.summary && (
+                <div
+                  style={{
+                    background: 'white',
+                    border: '1px solid var(--color-border)',
+                    borderRadius: 'var(--radius-lg)',
+                    padding: '1rem',
+                  }}
+                >
+                  <p style={{ fontSize: '0.78rem', fontWeight: 800, color: 'var(--color-text-muted)', marginBottom: '0.35rem' }}>
+                    Intake Summary
+                  </p>
+                  <p>{voiceDraft.structuredData.summary}</p>
+                </div>
+              )}
+
+              {missingFields.length > 0 && (
+                <div
+                  style={{
+                    background: 'var(--color-warning-bg)',
+                    border: '1px solid #fcd34d',
+                    borderRadius: 'var(--radius-lg)',
+                    padding: '1rem',
+                    display: 'grid',
+                    gap: '0.55rem',
+                  }}
+                >
+                  <p style={{ fontWeight: 800, color: 'var(--color-warning)' }}>
+                    Missing fields need confirmation
+                  </p>
+                  <p style={{ color: '#92400e' }}>
+                    ದಯವಿಟ್ಟು ಕೆಳಗಿನ ವಿವರಗಳನ್ನು ಕೈಯಾರೆ ಪರಿಶೀಲಿಸಿ ಮತ್ತು ಪೂರ್ಣಗೊಳಿಸಿ.
+                  </p>
+                  <p style={{ color: '#92400e', fontWeight: 600 }}>
+                    {missingFields
+                      .map((field) => `${field} / ${MISSING_FIELD_TRANSLATIONS[field] ?? field}`)
+                      .join(', ')}
+                  </p>
+                </div>
+              )}
+
+              {voiceError && (
+                <div
+                  style={{
+                    background: 'var(--color-error-bg)',
+                    border: '1px solid #fca5a5',
+                    borderRadius: 'var(--radius-lg)',
+                    padding: '0.9rem 1rem',
+                    color: 'var(--color-error)',
+                    fontWeight: 600,
+                  }}
+                >
+                  {voiceError}
+                </div>
+              )}
+            </div>
+
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+                gap: '1rem',
+              }}
+            >
+              <div>
+                <label htmlFor="patientName">Patient Name</label>
+                {isProcessingVoice ? (
+                  <div className="intake-extracting-skeleton" />
+                ) : (
+                  <input
+                    className={autoFilledFlash ? 'intake-autofilled' : undefined}
+                    id="patientName"
+                    name="patientName"
+                    type="text"
+                    value={patientName}
+                    onChange={(event) => setPatientName(event.target.value)}
+                    required
+                    placeholder="Enter patient name"
+                  />
+                )}
+              </div>
+
+              <div>
+                <label htmlFor="age">Age</label>
+                {isProcessingVoice ? (
+                  <div className="intake-extracting-skeleton" />
+                ) : (
+                  <input
+                    className={autoFilledFlash ? 'intake-autofilled' : undefined}
+                    id="age"
+                    name="age"
+                    type="number"
+                    min="0"
+                    inputMode="numeric"
+                    value={age}
+                    onChange={(event) => setAge(event.target.value)}
+                    placeholder="Optional"
+                  />
+                )}
+              </div>
+
+              <div>
+                <label htmlFor="phone">Phone</label>
+                {isProcessingVoice ? (
+                  <div className="intake-extracting-skeleton" />
+                ) : (
+                  <input
+                    className={autoFilledFlash ? 'intake-autofilled' : undefined}
+                    id="phone"
+                    name="phone"
+                    type="tel"
+                    value={phone}
+                    onChange={(event) => {
+                      setPhone(event.target.value);
+                      setSelectedPatientId('');
+                      setAllowSharedMobileNewPatient(false);
+                      if (detailsStepLabel === 'shared-mobile') {
+                        setDetailsStepLabel('new');
+                      }
+                    }}
+                    required
+                    placeholder="10-digit phone number"
+                  />
+                )}
+              </div>
+
+              <div>
+                <label htmlFor="visitType">Visit Type</label>
+                {isProcessingVoice ? (
+                  <div className="intake-extracting-skeleton" />
+                ) : (
+                  <select
+                    className={autoFilledFlash ? 'intake-autofilled' : undefined}
+                    id="visitType"
+                    name="visitType"
+                    value={visitType}
+                    onChange={(event) => setVisitType(event.target.value as VisitType)}
+                  >
+                    {VISIT_TYPE_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </div>
+            </div>
+
+            <div>
+              <label htmlFor="complaint">Complaint</label>
+              {isProcessingVoice ? (
+                <div className="intake-extracting-skeleton intake-extracting-skeleton-large" />
+              ) : (
+                <textarea
+                  className={autoFilledFlash ? 'intake-autofilled' : undefined}
+                  id="complaint"
+                  name="complaint"
+                  rows={5}
+                  value={complaint}
+                  onChange={(event) => setComplaint(event.target.value)}
+                  required
+                  placeholder="Describe the chief complaint"
+                  style={{ resize: 'vertical' }}
+                />
+              )}
+            </div>
+
+            <input type="hidden" name="doctorId" value={doctorId} />
+            <input type="hidden" name="bookedFor" value={bookedFor} />
+            <input type="hidden" name="patientId" value={selectedPatientId} />
+            <input
+              type="hidden"
+              name="allowSharedMobileNewPatient"
+              value={allowSharedMobileNewPatient ? 'true' : 'false'}
+            />
+            <input type="hidden" name="payment_mode" value="cash" />
+            <input type="hidden" name="payment_status" value="pending" />
+
+            {submitError && (
+              <div
+                style={{
+                  background: 'var(--color-error-bg)',
+                  border: '1px solid #fca5a5',
+                  borderRadius: 'var(--radius-lg)',
+                  padding: '0.9rem 1rem',
+                  color: 'var(--color-error)',
+                  fontWeight: 600,
+                }}
+              >
+                {submitError}
+              </div>
+            )}
+
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                gap: '1rem',
+                flexWrap: 'wrap',
+              }}
+            >
+              <div style={{ color: 'var(--color-text-muted)', fontSize: '0.92rem' }}>
+                Appointment date: <strong style={{ color: 'var(--color-text)' }}>{bookedFor}</strong>
+              </div>
+
+              <button
+                type="submit"
+                disabled={isSubmitting || isProcessingVoice}
+                style={{
+                  border: 'none',
+                  borderRadius: 'var(--radius-md)',
+                  padding: '0.95rem 1.4rem',
+                  background: 'var(--color-accent)',
+                  color: 'white',
+                  fontWeight: 800,
+                  minWidth: '12rem',
+                  boxShadow: 'var(--shadow-sm)',
+                }}
+              >
+                {isSubmitting ? 'Creating Token...' : 'Create Token'}
+              </button>
+            </div>
+          </form>
         </div>
-      </form>
-      </div>
+      )}
     </div>
   );
 }

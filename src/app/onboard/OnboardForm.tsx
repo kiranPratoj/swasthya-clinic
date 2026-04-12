@@ -142,7 +142,7 @@ export default function OnboardForm() {
         </h2>
         <p style={{ color: 'var(--color-text-muted)', marginBottom: '1.5rem' }}>
           Your clinic is live at:<br />
-          <strong style={{ color: 'var(--color-primary)', fontSize: '1.1rem' }}>{slug}.swasthya.app</strong>
+          <strong style={{ color: 'var(--color-primary)', fontSize: '1.1rem' }}>{slug}.sarvam.clinic</strong>
         </p>
         
         <div style={{ 
@@ -162,14 +162,14 @@ export default function OnboardForm() {
         </div>
 
         <button 
-          onClick={() => router.push(`/${slug}/admin`)}
+          onClick={() => router.push(`/${slug}/queue`)}
           style={{
             width: '100%', padding: '1rem', background: 'var(--color-primary)',
             color: 'white', border: 'none', borderRadius: 'var(--radius-md)', fontWeight: '700',
             cursor: 'pointer', fontSize: '1rem'
           }}
         >
-          Go to Dashboard →
+          Open Staff Console →
         </button>
       </div>
     );
@@ -255,7 +255,7 @@ export default function OnboardForm() {
             </div>
             {slugStatusMsg && <p style={{ fontSize: '0.75rem', color: 'var(--color-error)', marginTop: '0.25rem' }}>{slugStatusMsg}</p>}
             <p style={{ fontSize: '0.75rem', marginTop: '0.4rem', color: 'var(--color-text-muted)' }}>
-              URL: <span style={{ color: 'var(--color-primary)', fontWeight: '600' }}>{slug || 'your-clinic'}.swasthya.app</span>
+              URL: <span style={{ color: 'var(--color-primary)', fontWeight: '600' }}>{slug || 'your-clinic'}.sarvam.clinic</span>
             </p>
           </div>
 
@@ -385,7 +385,7 @@ export default function OnboardForm() {
               <div>
                 <span style={{ color: 'var(--color-text-muted)', display: 'block', fontSize: '0.75rem', fontWeight: '700' }}>CLINIC</span>
                 <strong>{clinicName}</strong> ({speciality})<br />
-                {slug}.swasthya.app
+                {slug}.sarvam.clinic
               </div>
               <div>
                 <span style={{ color: 'var(--color-text-muted)', display: 'block', fontSize: '0.75rem', fontWeight: '700' }}>DOCTOR</span>

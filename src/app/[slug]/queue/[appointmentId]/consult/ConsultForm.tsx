@@ -1,9 +1,9 @@
 'use client';
 
-import { useState, useRef, useEffect, FormEvent } from 'react';
+import { useState, useRef, FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
-import { generateSoapNote, saveVisitRecord } from '@/app/actions';
-import type { QueueItem } from '@/lib/types';
+import { generateSoapNote, saveVisitRecord, updateAppointmentPayment } from '@/app/actions';
+import type { QueueItem, VisitHistory } from '@/lib/types';
 
 type PrescriptionRow = {
   drug: string;
@@ -18,8 +18,11 @@ type SOAPNote = {
   plan: string;
 };
 
+type PaymentMode = 'cash' | 'upi';
+type PaymentState = 'pending' | 'paid';
+
 type Props = {
-  appointment: QueueItem;
+  appointment: QueueItem & { recentHistory?: VisitHistory[] };
   slug: string;
 };
 
@@ -29,12 +32,26 @@ function getTodayIsoDate(): string {
   return localTime.toISOString().split('T')[0];
 }
 
+function formatDoctorName(name?: string | null): string {
+  if (!name) return 'Doctor';
+  return name.replace(/^\s*dr\.?\s*/i, '').trim();
+}
+
+function extractHeadline(summary: string): string {
+  const diagnosisMatch = summary.match(/Diagnosis:\s*(.*)/i);
+  if (diagnosisMatch?.[1]) {
+    return diagnosisMatch[1].trim();
+  }
+
+  return summary.split('\n')[0]?.trim() || 'Previous visit';
+}
+
 export default function ConsultForm({ appointment, slug }: Props) {
   const router = useRouter();
+  const doctorName = formatDoctorName(appointment.doctor?.name);
   const [isRecording, setIsRecording] = useState(false);
   const [isTranscribing, setIsProcessing] = useState(false);
   const [transcript, setTranscript] = useState('');
-  const [liveTranscript, setLiveTranscript] = useState('');
   
   const [soap, setSoap] = useState<SOAPNote>({
     subjective: '',
@@ -49,6 +66,10 @@ export default function ConsultForm({ appointment, slug }: Props) {
   const [followUpDate, setFollowUpDate] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showPrintView, setShowPrintView] = useState(false);
+  const [paymentMode, setPaymentMode] = useState<PaymentMode>(appointment.payment_mode === 'upi' ? 'upi' : 'cash');
+  const [paymentState, setPaymentState] = useState<PaymentState>(appointment.payment_status === 'verified' ? 'paid' : 'pending');
+  const [isSavingPayment, setIsSavingPayment] = useState(false);
+  const [paymentFeedback, setPaymentFeedback] = useState<string | null>(null);
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
@@ -75,7 +96,6 @@ export default function ConsultForm({ appointment, slug }: Props) {
       mediaRecorder.start();
       recordingStartTimeRef.current = Date.now();
       setIsRecording(true);
-      setLiveTranscript('Listening...');
     } catch (err) {
       console.error('Error accessing microphone:', err);
       alert('Microphone access denied or not supported.');
@@ -159,24 +179,46 @@ export default function ConsultForm({ appointment, slug }: Props) {
     }
   };
 
+  const handlePaymentSave = async () => {
+    setIsSavingPayment(true);
+    setPaymentFeedback(null);
+    try {
+      const result = await updateAppointmentPayment(appointment.id, paymentMode, paymentState);
+      setPaymentFeedback(
+        result.persisted
+          ? paymentState === 'paid'
+            ? 'Payment marked as paid.'
+            : 'Payment left as pending.'
+          : 'Payment could not be saved to the appointment yet. Apply the payment migration before the demo.'
+      );
+    } catch (err) {
+      console.error('Payment update error:', err);
+      setPaymentFeedback('Could not update payment right now.');
+    } finally {
+      setIsSavingPayment(false);
+    }
+  };
+
   if (showPrintView) {
     return (
       <div style={{ background: 'white', padding: '2rem', borderRadius: 'var(--radius-lg)', boxShadow: 'var(--shadow-md)' }}>
         <div className="print-only">
           <div style={{ textAlign: 'center', marginBottom: '2rem', borderBottom: '2px solid var(--color-primary)', paddingBottom: '1rem' }}>
-            <h1 style={{ color: 'var(--color-primary)', margin: 0 }}>Swasthya Clinic</h1>
-            <p style={{ margin: '0.25rem 0' }}>Medical Discharge Summary</p>
+            <h1 style={{ color: 'var(--color-primary)', margin: 0 }}>Sarvam Clinic</h1>
+            <p style={{ margin: '0.25rem 0' }}>Visit Summary</p>
           </div>
           
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '2rem' }}>
             <div>
               <p><strong>Patient:</strong> {appointment.patient.name}</p>
               <p><strong>Age:</strong> {appointment.patient.age ?? 'N/A'}</p>
+              <p><strong>Complaint:</strong> {appointment.complaint}</p>
               <p><strong>Date:</strong> {getTodayIsoDate()}</p>
             </div>
             <div style={{ textAlign: 'right' }}>
-              <p><strong>Doctor:</strong> Dr. {appointment.doctor_id}</p>
+              <p><strong>Doctor:</strong> Dr. {doctorName}</p>
               <p><strong>Token:</strong> #{appointment.token_number}</p>
+              <p><strong>Payment:</strong> {paymentState === 'paid' ? `Paid · ${paymentMode === 'cash' ? 'Cash' : 'UPI'}` : 'Pending'}</p>
             </div>
           </div>
 
@@ -215,7 +257,7 @@ export default function ConsultForm({ appointment, slug }: Props) {
 
           <div style={{ marginTop: '4rem', textAlign: 'right' }}>
             <div style={{ display: 'inline-block', borderTop: '1px solid #333', paddingTop: '0.5rem', minWidth: '150px', textAlign: 'center' }}>
-              Doctor's Signature
+              Doctor&apos;s Signature
             </div>
           </div>
         </div>
@@ -224,6 +266,103 @@ export default function ConsultForm({ appointment, slug }: Props) {
           <div style={{ fontSize: '3rem' }}>✅</div>
           <h2>Consultation Completed</h2>
           <p>The record has been saved to visit history.</p>
+          <section
+            className="card"
+            style={{
+              maxWidth: '32rem',
+              margin: '0 auto',
+              textAlign: 'left',
+              display: 'grid',
+              gap: '1rem',
+            }}
+          >
+            <div style={{ display: 'grid', gap: '0.25rem' }}>
+              <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 800 }}>Payment</h3>
+              <p style={{ margin: 0, color: 'var(--color-text-muted)' }}>
+                Mark the visit as paid or pending before returning to the queue.
+              </p>
+            </div>
+
+            <div style={{ display: 'grid', gap: '0.5rem' }}>
+              <span style={{ fontSize: '0.8rem', fontWeight: 800, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                Payment mode
+              </span>
+              <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+                {(['cash', 'upi'] as const).map((mode) => {
+                  const active = paymentMode === mode;
+                  return (
+                    <button
+                      key={mode}
+                      type="button"
+                      onClick={() => setPaymentMode(mode)}
+                      style={{
+                        padding: '0.7rem 1rem',
+                        borderRadius: '999px',
+                        border: active ? 'none' : '1px solid var(--color-border)',
+                        background: active ? 'var(--color-primary)' : 'white',
+                        color: active ? 'white' : 'var(--color-primary)',
+                        fontWeight: 800,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      {mode === 'cash' ? 'Cash' : 'UPI'}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div style={{ display: 'grid', gap: '0.5rem' }}>
+              <span style={{ fontSize: '0.8rem', fontWeight: 800, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                Payment status
+              </span>
+              <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+                {(['pending', 'paid'] as const).map((state) => {
+                  const active = paymentState === state;
+                  return (
+                    <button
+                      key={state}
+                      type="button"
+                      onClick={() => setPaymentState(state)}
+                      style={{
+                        padding: '0.7rem 1rem',
+                        borderRadius: '999px',
+                        border: active ? 'none' : '1px solid var(--color-border)',
+                        background: active ? 'var(--color-primary)' : 'white',
+                        color: active ? 'white' : 'var(--color-primary)',
+                        fontWeight: 800,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      {state === 'paid' ? 'Paid' : 'Pending'}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', alignItems: 'center' }}>
+              <button
+                type="button"
+                onClick={handlePaymentSave}
+                disabled={isSavingPayment}
+                style={{
+                  padding: '0.8rem 1.2rem',
+                  background: 'var(--color-primary)',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: 'var(--radius-md)',
+                  fontWeight: 800,
+                  cursor: 'pointer',
+                }}
+              >
+                {isSavingPayment ? 'Saving Payment...' : 'Save Payment'}
+              </button>
+              {paymentFeedback && (
+                <span style={{ color: 'var(--color-text-muted)', fontSize: '0.9rem' }}>{paymentFeedback}</span>
+              )}
+            </div>
+          </section>
           <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center' }}>
             <button 
               onClick={() => window.print()}
@@ -236,7 +375,7 @@ export default function ConsultForm({ appointment, slug }: Props) {
                 fontWeight: 700
               }}
             >
-              Print Discharge Card
+              Print Visit Summary
             </button>
             <button 
               onClick={() => router.push(`/${slug}/queue`)}
@@ -278,118 +417,50 @@ export default function ConsultForm({ appointment, slug }: Props) {
 
   return (
     <div style={{ display: 'grid', gap: '2rem' }}>
-      {/* Voice Panel */}
-      <section style={{ 
-        background: 'var(--color-primary-soft)', 
-        padding: '1.5rem', 
-        borderRadius: 'var(--radius-xl)',
-        border: '1px solid var(--color-primary-outline)',
-        display: 'grid',
-        gap: '1rem'
-      }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <h2 style={{ fontSize: '1.2rem', fontWeight: 800, color: 'var(--color-primary)', margin: 0 }}>AI Scribe</h2>
-          {isRecording && <span style={{ color: 'var(--color-error)', fontWeight: 800, animation: 'pulse 1.5s infinite' }}>● RECORDING</span>}
-        </div>
-        
-        <p style={{ fontSize: '0.9rem', color: 'var(--color-text-muted)' }}>
-          Record your conversation with the patient. Our AI will automatically structure it into medical notes.
-        </p>
-
-        <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
-          {!isRecording ? (
-            <button 
-              type="button"
-              onClick={startRecording}
-              style={{
-                background: 'var(--color-primary)',
-                color: 'white',
-                border: 'none',
-                padding: '0.8rem 1.5rem',
-                borderRadius: '999px',
-                fontWeight: 800,
-                display: 'flex',
-                alignItems: 'center',
-                gap: '0.5rem'
-              }}
-            >
-              🎤 Start Recording
-            </button>
-          ) : (
-            <button 
-              type="button"
-              onClick={stopRecording}
-              style={{
-                background: 'var(--color-error)',
-                color: 'white',
-                border: 'none',
-                padding: '0.8rem 1.5rem',
-                borderRadius: '999px',
-                fontWeight: 800
-              }}
-            >
-              🛑 Stop & Process
-            </button>
-          )}
-          
-          {isTranscribing && <span style={{ fontWeight: 600 }}>Processing with Sarvam AI...</span>}
-        </div>
-
-        {transcript && (
-          <div style={{ background: 'white', padding: '1rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-primary-outline)' }}>
-            <span style={{ fontSize: '0.7rem', fontWeight: 800, color: 'var(--color-primary)', textTransform: 'uppercase' }}>Transcript</span>
-            <p style={{ margin: '0.5rem 0 0', fontSize: '0.95rem' }}>{transcript}</p>
+      {appointment.recentHistory && appointment.recentHistory.length > 0 && (
+        <section className="card" style={{ display: 'grid', gap: '1rem' }}>
+          <div style={{ display: 'grid', gap: '0.35rem' }}>
+            <h2 style={{ fontSize: '1.1rem', fontWeight: 800, margin: 0 }}>Recent Continuity</h2>
+            <p className="mobile-copy-optional" style={{ color: 'var(--color-text-muted)', margin: 0 }}>
+              Last visits for this patient. Use them if they help, or ignore them and continue.
+            </p>
           </div>
-        )}
-      </section>
-
-      {/* Consult Form */}
-      <form onSubmit={handleSubmit} style={{ display: 'grid', gap: '1.5rem' }}>
-        <section className="card" style={{ display: 'grid', gap: '1.25rem' }}>
-          <h2 style={{ fontSize: '1.1rem', fontWeight: 800 }}>SOAP Note</h2>
-          
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-            <div>
-              <label>Subjective</label>
-              <textarea 
-                value={soap.subjective}
-                onChange={e => setSoap({...soap, subjective: e.target.value})}
-                rows={4}
-                placeholder="Patient's history & symptoms"
-              />
-            </div>
-            <div>
-              <label>Objective</label>
-              <textarea 
-                value={soap.objective}
-                onChange={e => setSoap({...soap, objective: e.target.value})}
-                rows={4}
-                placeholder="Physical findings & vitals"
-              />
-            </div>
-            <div>
-              <label>Assessment</label>
-              <textarea 
-                value={soap.assessment}
-                onChange={e => setSoap({...soap, assessment: e.target.value})}
-                rows={4}
-                placeholder="Professional evaluation"
-              />
-            </div>
-            <div>
-              <label>Plan</label>
-              <textarea 
-                value={soap.plan}
-                onChange={e => setSoap({...soap, plan: e.target.value})}
-                rows={4}
-                placeholder="Next steps & tests"
-              />
-            </div>
+          <div style={{ display: 'grid', gap: '0.75rem' }}>
+            {appointment.recentHistory.map((visit) => (
+              <article
+                key={visit.id}
+                style={{
+                  border: '1px solid var(--color-border)',
+                  borderRadius: 'var(--radius-lg)',
+                  padding: '0.9rem 1rem',
+                  background: 'white',
+                  display: 'grid',
+                  gap: '0.4rem',
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap' }}>
+                  <strong>{extractHeadline(visit.summary)}</strong>
+                  <span style={{ color: 'var(--color-text-muted)', fontSize: '0.85rem' }}>
+                    {new Date(visit.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                  </span>
+                </div>
+                <p style={{ color: 'var(--color-text-muted)', fontSize: '0.92rem', margin: 0, whiteSpace: 'pre-wrap' }}>
+                  {visit.summary}
+                </p>
+              </article>
+            ))}
           </div>
         </section>
+      )}
 
+      <form onSubmit={handleSubmit} style={{ display: 'grid', gap: '1.5rem' }}>
         <section className="card" style={{ display: 'grid', gap: '1.25rem' }}>
-          <h2 style={{ fontSize: '1.1rem', fontWeight: 800 }}>Diagnosis & Prescription</h2>
+          <div style={{ display: 'grid', gap: '0.35rem' }}>
+            <h2 style={{ fontSize: '1.1rem', fontWeight: 800, margin: 0 }}>Diagnosis & Prescription</h2>
+            <p className="mobile-copy-optional" style={{ color: 'var(--color-text-muted)', margin: 0 }}>
+              Complete this manually or use the AI Assist below.
+            </p>
+          </div>
           
           <div>
             <label>Final Diagnosis</label>
@@ -413,27 +484,24 @@ export default function ConsultForm({ appointment, slug }: Props) {
               {prescription.map((row, i) => (
                 <div key={i} style={{ display: 'flex', gap: '0.5rem', alignItems: 'flex-end' }}>
                   <div style={{ flex: 2 }}>
-                    <input 
+                    <input
                       placeholder="Drug Name"
                       value={row.drug}
                       onChange={e => updatePrescriptionRow(i, 'drug', e.target.value)}
-                      required
                     />
                   </div>
                   <div style={{ flex: 1 }}>
-                    <input 
+                    <input
                       placeholder="Dose"
                       value={row.dose}
                       onChange={e => updatePrescriptionRow(i, 'dose', e.target.value)}
-                      required
                     />
                   </div>
                   <div style={{ flex: 1 }}>
-                    <input 
+                    <input
                       placeholder="Freq (e.g. 1-0-1)"
                       value={row.frequency}
                       onChange={e => updatePrescriptionRow(i, 'frequency', e.target.value)}
-                      required
                     />
                   </div>
                   <button type="button" onClick={() => removePrescriptionRow(i)} style={{ color: 'var(--color-error)', border: 'none', background: 'none', paddingBottom: '0.5rem' }}>✕</button>
@@ -453,6 +521,125 @@ export default function ConsultForm({ appointment, slug }: Props) {
           </div>
         </section>
 
+        {/* AI Scribe - Integrated for Voice First approach */}
+        <section
+          style={{
+            background: 'var(--color-primary-soft)',
+            padding: '1.5rem',
+            borderRadius: 'var(--radius-xl)',
+            border: '1px solid var(--color-primary-outline)',
+            display: 'grid',
+            gap: '1rem'
+          }}
+        >
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={{ display: 'grid', gap: '0.35rem' }}>
+              <h2 style={{ fontSize: '1.1rem', fontWeight: 800, color: 'var(--color-primary)', margin: 0 }}>AI Consult Assist</h2>
+              <p style={{ fontSize: '0.9rem', color: 'var(--color-text-muted)', margin: 0 }}>
+                Record the consultation to auto-generate notes and prescriptions.
+              </p>
+            </div>
+            {isRecording && <span style={{ color: 'var(--color-error)', fontWeight: 800, animation: 'pulse 1.5s infinite' }}>● RECORDING</span>}
+          </div>
+
+          <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', flexWrap: 'wrap' }}>
+            {!isRecording ? (
+              <button
+                type="button"
+                onClick={startRecording}
+                disabled={isTranscribing || isSubmitting}
+                style={{
+                  background: 'var(--color-primary)',
+                  color: 'white',
+                  border: 'none',
+                  padding: '0.8rem 1.5rem',
+                  borderRadius: '999px',
+                  fontWeight: 800,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.5rem',
+                  cursor: 'pointer'
+                }}
+              >
+                🎤 Start Recording
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={stopRecording}
+                style={{
+                  background: 'var(--color-error)',
+                  color: 'white',
+                  border: 'none',
+                  padding: '0.8rem 1.5rem',
+                  borderRadius: '999px',
+                  fontWeight: 800,
+                  cursor: 'pointer'
+                }}
+              >
+                🛑 Stop & Process
+              </button>
+            )}
+
+            {isTranscribing && <span style={{ fontWeight: 600 }}>Processing with Sarvam AI...</span>}
+          </div>
+
+          {transcript && (
+            <div style={{ background: 'white', padding: '1rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-primary-outline)' }}>
+              <span style={{ fontSize: '0.7rem', fontWeight: 800, color: 'var(--color-primary)', textTransform: 'uppercase' }}>Transcript</span>
+              <p style={{ margin: '0.5rem 0 0', fontSize: '0.95rem' }}>{transcript}</p>
+            </div>
+          )}
+        </section>
+
+        <section className="card" style={{ display: 'grid', gap: '1.25rem' }}>
+          <div style={{ display: 'grid', gap: '0.35rem' }}>
+            <h2 style={{ fontSize: '1.1rem', fontWeight: 800, margin: 0 }}>Clinical Note (SOAP)</h2>
+            <p className="mobile-copy-optional" style={{ color: 'var(--color-text-muted)', margin: 0 }}>
+              These fields are auto-filled by the AI scribe above.
+            </p>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+            <div>
+              <label>Subjective</label>
+              <textarea
+                value={soap.subjective}
+                onChange={e => setSoap({...soap, subjective: e.target.value})}
+                rows={4}
+                placeholder="Symptoms & history"
+              />
+            </div>
+            <div>
+              <label>Objective</label>
+              <textarea
+                value={soap.objective}
+                onChange={e => setSoap({...soap, objective: e.target.value})}
+                rows={4}
+                placeholder="Findings & vitals"
+              />
+            </div>
+            <div>
+              <label>Assessment</label>
+              <textarea
+                value={soap.assessment}
+                onChange={e => setSoap({...soap, assessment: e.target.value})}
+                rows={4}
+                placeholder="Evaluation"
+              />
+            </div>
+            <div>
+              <label>Plan</label>
+              <textarea
+                value={soap.plan}
+                onChange={e => setSoap({...soap, plan: e.target.value})}
+                rows={4}
+                placeholder="Next steps"
+              />
+            </div>
+          </div>
+        </section>
+
         <button 
           type="submit"
           disabled={isSubmitting}
@@ -468,7 +655,7 @@ export default function ConsultForm({ appointment, slug }: Props) {
             cursor: 'pointer'
           }}
         >
-          {isSubmitting ? 'Saving Record...' : 'Complete Consultation & Generate Discharge Card'}
+          {isSubmitting ? 'Saving Record...' : 'Complete Consultation'}
         </button>
       </form>
     </div>

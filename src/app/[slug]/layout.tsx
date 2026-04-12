@@ -3,6 +3,11 @@ import { getClinicDb } from '@/lib/db';
 import Link from 'next/link';
 import type { Clinic, Doctor } from '@/lib/types';
 import StaffBottomNav from '@/components/StaffBottomNav';
+import { getSessionOrNull } from '@/lib/auth';
+
+function normalizeDoctorName(name: string): string {
+  return name.replace(/^dr\.?\s*/i, '').trim();
+}
 
 async function getClinicContext(): Promise<{ clinic: Clinic; doctor: Doctor | null } | null> {
   const h = await headers();
@@ -28,75 +33,156 @@ export default async function SlugLayout({
 }) {
   const { slug } = await params;
   const ctx = await getClinicContext();
+  const session = await getSessionOrNull();
 
   const clinicName = ctx?.clinic.name ?? slug;
-  const doctorName = ctx?.doctor?.name ?? 'Doctor';
+  const doctorName = normalizeDoctorName(ctx?.doctor?.name ?? 'Doctor');
+  const primaryNavItems = [
+    { href: `/${slug}/queue`, label: 'Queue' },
+    { href: `/${slug}/intake`, label: 'Intake' },
+    { href: `/${slug}/patients`, label: 'Patients' },
+  ];
+  const moreNavItems: Array<{ href: string; label: string }> = [];
+  if (session?.role === 'admin' || session?.role === 'doctor') {
+    moreNavItems.push({ href: `/${slug}/settings`, label: 'Settings' });
+    moreNavItems.push({ href: `/${slug}/history`, label: 'History' });
+  }
+  if (session?.role === 'admin') {
+    moreNavItems.push({ href: `/${slug}/admin`, label: 'Admin' });
+  }
 
   return (
     <div>
       <div className="staff-sub-nav-desktop" style={{
         background: 'linear-gradient(180deg, var(--color-bg) 0%, white 100%)',
         borderBottom: '1px solid rgba(3, 78, 162, 0.12)',
-        padding: '0.9rem 0 1rem',
+        padding: '0.85rem 0 0.9rem',
         fontSize: '0.84rem',
       }}>
-        <div className="max-w-7xl px-4" style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto auto', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
-          <div style={{ minWidth: 0 }}>
+        <div className="max-w-7xl px-4" style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto', alignItems: 'center', gap: '1rem 1.5rem' }}>
+          <div style={{ minWidth: 0, display: 'grid', gap: '0.75rem' }}>
             <div style={{ fontSize: '0.7rem', fontWeight: 800, color: 'var(--color-primary)', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '0.2rem' }}>
               Clinic Console
             </div>
-            <span style={{ fontWeight: 800, color: 'var(--color-text)', fontSize: '1.05rem' }}>
-              {clinicName}
-            </span>
-            {ctx?.clinic.speciality && (
-              <span style={{ fontWeight: 600, color: 'var(--color-text-muted)', marginLeft: '0.65rem' }}>· {ctx.clinic.speciality}</span>
-            )}
-          </div>
-
-          <nav className="slug-sub-nav" style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', justifyContent: 'center' }}>
-            {[
-              { href: `/${slug}/intake`, label: 'Intake' },
-              { href: `/${slug}/queue`, label: 'Queue' },
-              { href: `/${slug}/patients`, label: 'Patients' },
-              { href: `/${slug}/history`, label: 'History' },
-              { href: `/${slug}/admin`, label: 'Dashboard' },
-              { href: `/${slug}/settings`, label: 'Settings' },
-            ].map(({ href, label }) => (
-              <Link key={href} href={href} style={{
-                padding: '0.55rem 0.8rem',
-                fontSize: '0.8rem',
-                fontWeight: 700,
-                color: 'var(--color-primary)',
-                borderRadius: '999px',
-                border: '1px solid var(--color-primary-outline)',
-                background: 'white',
-                boxShadow: 'var(--shadow-sm)',
-                textDecoration: 'none',
-                whiteSpace: 'nowrap',
-              }}>
-                {label}
-              </Link>
-            ))}
-          </nav>
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', justifyContent: 'flex-end', flexWrap: 'wrap' }}>
-            <span style={{ color: 'var(--color-primary)', fontSize: '0.8rem', fontWeight: 700, padding: '0.45rem 0.7rem', background: 'var(--color-primary-soft)', borderRadius: '999px', whiteSpace: 'nowrap' }}>
-              Dr. {doctorName}
-            </span>
-            <form action="/api/auth/logout" method="POST">
-              <button type="submit" style={{
-                fontSize: '0.76rem',
-                fontWeight: 700,
-                color: 'var(--color-error)',
-                background: 'rgba(237, 28, 36, 0.06)',
-                border: '1px solid rgba(237, 28, 36, 0.16)',
-                borderRadius: '999px',
-                padding: '0.45rem 0.8rem',
-                cursor: 'pointer',
-              }}>
-                Sign out
-              </button>
-            </form>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.55rem', flexWrap: 'wrap' }}>
+              <span style={{ fontWeight: 800, color: 'var(--color-text)', fontSize: '1.05rem' }}>
+                {clinicName}
+              </span>
+              {ctx?.clinic.speciality && (
+                <span style={{ fontWeight: 600, color: 'var(--color-text-muted)' }}>· {ctx.clinic.speciality}</span>
+              )}
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem', flexWrap: 'wrap' }}>
+              <nav className="slug-sub-nav" style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                {primaryNavItems.map(({ href, label }) => (
+                  <Link key={href} href={href} style={{
+                    padding: '0.55rem 0.85rem',
+                    fontSize: '0.8rem',
+                    fontWeight: 700,
+                    color: 'var(--color-primary)',
+                    borderRadius: '999px',
+                    border: '1px solid var(--color-primary-outline)',
+                    background: 'white',
+                    boxShadow: 'var(--shadow-sm)',
+                    textDecoration: 'none',
+                    whiteSpace: 'nowrap',
+                  }}>
+                    {label}
+                  </Link>
+                ))}
+              </nav>
+              <details style={{ position: 'relative' }}>
+                <summary
+                  style={{
+                    listStyle: 'none',
+                    cursor: 'pointer',
+                    fontSize: '0.79rem',
+                    fontWeight: 700,
+                    color: 'var(--color-text-muted)',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  More
+                </summary>
+                <div
+                  style={{
+                    position: 'absolute',
+                    top: 'calc(100% + 0.55rem)',
+                    left: 0,
+                    minWidth: '11rem',
+                    background: 'white',
+                    border: '1px solid var(--color-border)',
+                    borderRadius: 'var(--radius-lg)',
+                    boxShadow: 'var(--shadow-md)',
+                    padding: '0.45rem',
+                    display: 'grid',
+                    gap: '0.2rem',
+                    zIndex: 10,
+                  }}
+                >
+                  {moreNavItems.length > 0 ? (
+                    <>
+                      {moreNavItems.map(({ href, label }) => (
+                        <Link
+                          key={href}
+                          href={href}
+                          style={{
+                            fontSize: '0.82rem',
+                            fontWeight: 700,
+                            color: 'var(--color-text)',
+                            textDecoration: 'none',
+                            padding: '0.6rem 0.75rem',
+                            borderRadius: 'var(--radius-md)',
+                            whiteSpace: 'nowrap',
+                          }}
+                        >
+                          {label}
+                        </Link>
+                      ))}
+                      <form action="/api/auth/logout" method="POST">
+                        <button
+                          type="submit"
+                          style={{
+                            width: '100%',
+                            fontSize: '0.82rem',
+                            fontWeight: 700,
+                            color: 'var(--color-error)',
+                            background: 'rgba(237, 28, 36, 0.06)',
+                            border: '1px solid rgba(237, 28, 36, 0.16)',
+                            borderRadius: 'var(--radius-md)',
+                            padding: '0.6rem 0.75rem',
+                            cursor: 'pointer',
+                            textAlign: 'left',
+                          }}
+                        >
+                          Sign out
+                        </button>
+                      </form>
+                    </>
+                  ) : (
+                    <form action="/api/auth/logout" method="POST">
+                      <button
+                        type="submit"
+                        style={{
+                          width: '100%',
+                          fontSize: '0.82rem',
+                          fontWeight: 700,
+                          color: 'var(--color-error)',
+                          background: 'rgba(237, 28, 36, 0.06)',
+                          border: '1px solid rgba(237, 28, 36, 0.16)',
+                          borderRadius: 'var(--radius-md)',
+                          padding: '0.6rem 0.75rem',
+                          cursor: 'pointer',
+                          textAlign: 'left',
+                        }}
+                      >
+                        Sign out
+                      </button>
+                    </form>
+                  )}
+                </div>
+              </details>
+            </div>
           </div>
         </div>
       </div>
@@ -108,7 +194,7 @@ export default async function SlugLayout({
 
       {/* Mobile bottom nav — hidden on desktop via .staff-bottom-nav-mobile */}
       <div className="staff-bottom-nav-mobile">
-        <StaffBottomNav slug={slug} doctorName={doctorName} />
+        <StaffBottomNav slug={slug} doctorName={doctorName} role={session?.role ?? 'receptionist'} />
       </div>
     </div>
   );

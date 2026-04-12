@@ -43,7 +43,7 @@ export default function PatientsClient({ patients, slug }: PatientsClientProps) 
     <div style={{ display: 'grid', gap: '1.5rem', paddingBottom: '4rem' }}>
       <header style={{ display: 'grid', gap: '0.4rem' }}>
         <h1 style={{ fontSize: '1.9rem', fontWeight: 800 }}>Patients</h1>
-        <p style={{ color: 'var(--color-text-muted)' }}>
+        <p className="mobile-copy-optional" style={{ color: 'var(--color-text-muted)' }}>
           Filter by patient name or phone number.
         </p>
       </header>

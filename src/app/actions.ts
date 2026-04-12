@@ -85,45 +85,91 @@ export async function checkSlugAvailable(slug: string): Promise<boolean> {
 export async function createAppointment(formData: FormData): Promise<{ appointmentId: string; tokenNumber: number; slug: string }> {
   const { clinicId, db } = await getTenantDb();
 
+  const existingPatientId = (formData.get('patientId') as string | null)?.trim() || null;
+  const allowSharedMobileNewPatient = formData.get('allowSharedMobileNewPatient') === 'true';
   const patientName = formData.get('patientName') as string;
   const age = formData.get('age') ? parseInt(formData.get('age') as string) : null;
   const phone = formData.get('phone') as string;
   const complaint = formData.get('complaint') as string;
   const visitType = (formData.get('visitType') as string) || 'walk-in';
   const bookedFor = (formData.get('bookedFor') as string) || new Date().toISOString().split('T')[0];
-  
-  const payment_utr = formData.get('payment_utr') as string | null;
-  const payment_amount = formData.get('payment_amount') ? parseFloat(formData.get('payment_amount') as string) : null;
-  const payment_status = (payment_utr || payment_amount) ? 'verified' : 'pending';
+  const requestedDoctorId = formData.get('doctorId') as string | null;
+  const payment_mode = (formData.get('payment_mode') as 'cash' | 'upi' | null) ?? 'cash';
+  const payment_state = (formData.get('payment_state') as 'pending' | 'paid' | null) ?? 'pending';
+  const payment_status = payment_state === 'paid' ? 'verified' : 'pending';
+  const baseAppointmentInsert = {
+    clinic_id: clinicId,
+    patient_id: '',
+    doctor_id: '',
+    token_number: 0,
+    visit_type: visitType,
+    complaint,
+    status: 'confirmed' as const,  // receptionist intake = patient is present
+    booked_for: bookedFor,
+  };
 
-  // Upsert patient by phone
+  // Reuse the explicitly selected patient when present. If a phone number already exists and no
+  // patient was selected, require an explicit shared-mobile override instead of silently reusing.
   let patientId: string;
-  const { data: existingPatient } = await db
-    .from('patients')
-    .select('id')
-    .eq('clinic_id', clinicId)
-    .eq('phone', phone)
-    .maybeSingle();
-
-  if (existingPatient) {
-    patientId = existingPatient.id;
-  } else {
-    const { data: newPatient, error: patErr } = await db
+  if (existingPatientId) {
+    const { data: selectedPatient, error: selectedPatientError } = await db
       .from('patients')
-      .insert({ clinic_id: clinicId, name: patientName, age, phone })
       .select('id')
-      .single();
-    if (patErr) throw new Error(patErr.message);
-    patientId = newPatient.id;
+      .eq('clinic_id', clinicId)
+      .eq('id', existingPatientId)
+      .maybeSingle();
+
+    if (selectedPatientError) throw new Error(selectedPatientError.message);
+    if (!selectedPatient) {
+      throw new Error('Selected patient not found for this clinic.');
+    }
+
+    patientId = selectedPatient.id;
+  } else {
+    const { data: existingPatients, error: existingPatientsError } = await db
+      .from('patients')
+      .select('id')
+      .eq('clinic_id', clinicId)
+      .eq('phone', phone);
+
+    if (existingPatientsError) throw new Error(existingPatientsError.message);
+
+    if ((existingPatients?.length ?? 0) > 0) {
+      if (!allowSharedMobileNewPatient) {
+        throw new Error(
+          'This mobile number already exists. Select the existing patient or choose "Create another patient with same mobile".'
+        );
+      }
+
+      const { data: newPatient, error: patErr } = await db
+        .from('patients')
+        .insert({ clinic_id: clinicId, name: patientName, age, phone })
+        .select('id')
+        .single();
+      if (patErr) throw new Error(patErr.message);
+      patientId = newPatient.id;
+    } else {
+      const { data: newPatient, error: patErr } = await db
+        .from('patients')
+        .insert({ clinic_id: clinicId, name: patientName, age, phone })
+        .select('id')
+        .single();
+      if (patErr) throw new Error(patErr.message);
+      patientId = newPatient.id;
+    }
   }
 
-  // Get first doctor for clinic
-  const { data: doctor } = await db
+  // Resolve doctor for the appointment.
+  let doctorQuery = db
     .from('doctors')
     .select('id')
-    .eq('clinic_id', clinicId)
-    .limit(1)
-    .single();
+    .eq('clinic_id', clinicId);
+
+  if (requestedDoctorId) {
+    doctorQuery = doctorQuery.eq('id', requestedDoctorId);
+  }
+
+  const { data: doctor } = await doctorQuery.limit(1).single();
   if (!doctor) throw new Error('No doctor found for clinic');
 
   // Get next token number
@@ -131,31 +177,52 @@ export async function createAppointment(formData: FormData): Promise<{ appointme
     .rpc('next_token_number', { p_clinic_id: clinicId, p_date: bookedFor });
   const tokenNumber: number = tokenData ?? 1;
 
-  const { data: appt, error: apptErr } = await db
+  const appointmentInsert = {
+    ...baseAppointmentInsert,
+    patient_id: patientId,
+    doctor_id: doctor.id,
+    token_number: tokenNumber,
+  };
+
+  let apptId: string | null = null;
+  const { data: apptWithPayment, error: apptErr } = await db
     .from('appointments')
     .insert({
-      clinic_id: clinicId,
-      patient_id: patientId,
-      doctor_id: doctor.id,
-      token_number: tokenNumber,
-      visit_type: visitType,
-      complaint,
-      status: 'confirmed',  // receptionist intake = patient is present
-      booked_for: bookedFor,
-      payment_utr,
-      payment_amount,
+      ...appointmentInsert,
+      payment_mode,
       payment_status,
     })
     .select('id')
     .single();
 
-  if (apptErr) throw new Error(apptErr.message);
+  if (apptErr) {
+    const missingPaymentColumn =
+      apptErr.message.includes('payment_amount') ||
+      apptErr.message.includes('payment_utr') ||
+      apptErr.message.includes('payment_status') ||
+      apptErr.message.includes('payment_mode');
 
-  await auditLog(clinicId, 'receptionist', 'appointment_created', appt.id, { tokenNumber, visitType });
+    if (!missingPaymentColumn) {
+      throw new Error(apptErr.message);
+    }
 
-  if (payment_utr || payment_amount) {
-    await auditLog(clinicId, 'receptionist', 'receipt_scanned', appt.id, { payment_utr, payment_amount });
+    const { data: fallbackAppt, error: fallbackErr } = await db
+      .from('appointments')
+      .insert(appointmentInsert)
+      .select('id')
+      .single();
+
+    if (fallbackErr) throw new Error(fallbackErr.message);
+    apptId = fallbackAppt.id;
+  } else {
+    apptId = apptWithPayment.id;
   }
+
+  if (!apptId) {
+    throw new Error('Failed to create appointment.');
+  }
+
+  await auditLog(clinicId, 'receptionist', 'appointment_created', apptId, { tokenNumber, visitType });
 
   // Get slug for redirect
   const { data: clinic } = await db.from('clinics').select('slug').eq('id', clinicId).single();
@@ -163,7 +230,7 @@ export async function createAppointment(formData: FormData): Promise<{ appointme
   revalidatePath(`/${clinic?.slug}/queue`);
   revalidatePath(`/${clinic?.slug}/admin`);
 
-  return { appointmentId: appt.id, tokenNumber, slug: clinic?.slug ?? '' };
+  return { appointmentId: apptId, tokenNumber, slug: clinic?.slug ?? '' };
 }
 
 export async function updateAppointmentStatus(
@@ -336,6 +403,103 @@ export async function rescheduleAppointment(
 
 // ─── Queries ──────────────────────────────────────────────────────────────────
 
+type PaymentAuditState = {
+  payment_mode: 'cash' | 'upi' | null;
+  payment_status: 'pending' | 'verified' | 'failed';
+};
+
+function extractPaymentAuditState(meta: Record<string, unknown> | null): PaymentAuditState | null {
+  if (!meta) {
+    return null;
+  }
+
+  const paymentMode = meta.payment_mode;
+  const paymentStatus = meta.payment_status;
+
+  const normalizedMode =
+    paymentMode === 'cash' || paymentMode === 'upi' ? paymentMode : null;
+  const normalizedStatus =
+    paymentStatus === 'pending' || paymentStatus === 'verified' || paymentStatus === 'failed'
+      ? paymentStatus
+      : null;
+
+  if (!normalizedStatus) {
+    return null;
+  }
+
+  return {
+    payment_mode: normalizedMode,
+    payment_status: normalizedStatus,
+  };
+}
+
+async function getPaymentAuditStateMap(
+  db: Awaited<ReturnType<typeof getTenantDb>>['db'],
+  clinicId: string,
+  appointmentIds: string[]
+): Promise<Map<string, PaymentAuditState>> {
+  const uniqueIds = [...new Set(appointmentIds.filter(Boolean))];
+  if (uniqueIds.length === 0) {
+    return new Map();
+  }
+
+  const { data, error } = await db
+    .from('audit_log')
+    .select('target_id, meta, created_at')
+    .eq('clinic_id', clinicId)
+    .eq('action', 'payment_updated')
+    .in('target_id', uniqueIds)
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  const paymentMap = new Map<string, PaymentAuditState>();
+
+  for (const entry of data ?? []) {
+    const appointmentId = typeof entry.target_id === 'string' ? entry.target_id : null;
+    if (!appointmentId || paymentMap.has(appointmentId)) {
+      continue;
+    }
+
+    const paymentState = extractPaymentAuditState(
+      entry.meta && typeof entry.meta === 'object' ? (entry.meta as Record<string, unknown>) : null
+    );
+
+    if (paymentState) {
+      paymentMap.set(appointmentId, paymentState);
+    }
+  }
+
+  return paymentMap;
+}
+
+async function applyPaymentAuditFallback<T extends { id: string; payment_mode?: 'cash' | 'upi' | null; payment_status?: 'pending' | 'verified' | 'failed' }>(
+  db: Awaited<ReturnType<typeof getTenantDb>>['db'],
+  clinicId: string,
+  rows: T[]
+): Promise<T[]> {
+  const paymentMap = await getPaymentAuditStateMap(
+    db,
+    clinicId,
+    rows.map((row) => row.id)
+  );
+
+  return rows.map((row) => {
+    const paymentState = paymentMap.get(row.id);
+    if (!paymentState) {
+      return row;
+    }
+
+    return {
+      ...row,
+      payment_mode: paymentState.payment_mode,
+      payment_status: paymentState.payment_status,
+    };
+  });
+}
+
 export async function getClinicQueue(date?: string): Promise<QueueItem[]> {
   const { clinicId, db } = await getTenantDb();
   const targetDate = date ?? new Date().toISOString().split('T')[0];
@@ -345,11 +509,12 @@ export async function getClinicQueue(date?: string): Promise<QueueItem[]> {
     .select('*, patient:patients(*)')
     .eq('clinic_id', clinicId)
     .eq('booked_for', targetDate)
-    .in('status', ['booked', 'confirmed', 'in_progress'])
+    .in('status', ['booked', 'confirmed', 'in_progress', 'completed'])
     .order('token_number', { ascending: true });
 
   if (error) throw new Error(error.message);
-  return (data ?? []) as QueueItem[];
+
+  return applyPaymentAuditFallback(db, clinicId, (data ?? []) as QueueItem[]);
 }
 
 export async function getPatientHistory(phone: string): Promise<Appointment[]> {
@@ -366,7 +531,7 @@ export async function getPatientHistory(phone: string): Promise<Appointment[]> {
 
   const { data, error } = await db
     .from('appointments')
-    .select('*')
+    .select('*, patient:patients(*)')
     .eq('clinic_id', clinicId)
     .eq('patient_id', patient.id)
     .order('created_at', { ascending: false })
@@ -374,6 +539,100 @@ export async function getPatientHistory(phone: string): Promise<Appointment[]> {
 
   if (error) throw new Error(error.message);
   return data ?? [];
+}
+
+export async function getPatientHistoryById(patientId: string): Promise<Appointment[]> {
+  const { clinicId, db } = await getTenantDb();
+
+  const { data, error } = await db
+    .from('appointments')
+    .select('*, patient:patients(*)')
+    .eq('clinic_id', clinicId)
+    .eq('patient_id', patientId)
+    .order('created_at', { ascending: false })
+    .limit(10);
+
+  if (error) throw new Error(error.message);
+  return data ?? [];
+}
+
+export async function searchPatientsByPhone(
+  query: string
+): Promise<
+  Array<{
+    id: string;
+    name: string;
+    phone: string;
+    age: number | null;
+    visitCount: number;
+    lastVisit: string | null;
+    activeToken: number | null;
+  }>
+> {
+  const { clinicId, db } = await getTenantDb();
+  const digitsOnly = query.replace(/\D/g, '').slice(0, 10);
+
+  if (digitsOnly.length < 3) {
+    return [];
+  }
+
+  const { data: patients, error: patientsError } = await db
+    .from('patients')
+    .select('id, name, phone, age')
+    .eq('clinic_id', clinicId)
+    .like('phone', `${digitsOnly}%`)
+    .order('phone', { ascending: true })
+    .limit(8);
+
+  if (patientsError) throw new Error(patientsError.message);
+  if (!patients || patients.length === 0) return [];
+
+  const patientIds = patients.map((patient) => patient.id);
+  const { data: appointments, error: appointmentsError } = await db
+    .from('appointments')
+    .select('patient_id, booked_for, token_number, status, created_at')
+    .eq('clinic_id', clinicId)
+    .in('patient_id', patientIds)
+    .order('booked_for', { ascending: false })
+    .order('created_at', { ascending: false });
+
+  if (appointmentsError) throw new Error(appointmentsError.message);
+
+  const metrics = new Map<
+    string,
+    { visitCount: number; lastVisit: string | null; activeToken: number | null }
+  >();
+
+  for (const appointment of appointments ?? []) {
+    const current = metrics.get(appointment.patient_id) ?? {
+      visitCount: 0,
+      lastVisit: null,
+      activeToken: null,
+    };
+
+    metrics.set(appointment.patient_id, {
+      visitCount: current.visitCount + 1,
+      lastVisit: current.lastVisit ?? appointment.booked_for,
+      activeToken:
+        current.activeToken ??
+        (appointment.status === 'confirmed' || appointment.status === 'in_progress'
+          ? appointment.token_number
+          : null),
+    });
+  }
+
+  return patients.map((patient) => {
+    const patientMetrics = metrics.get(patient.id);
+    return {
+      id: patient.id,
+      name: patient.name,
+      phone: patient.phone ?? '',
+      age: patient.age ?? null,
+      visitCount: patientMetrics?.visitCount ?? 0,
+      lastVisit: patientMetrics?.lastVisit ?? null,
+      activeToken: patientMetrics?.activeToken ?? null,
+    };
+  });
 }
 
 export async function getPatientByPhone(phone: string): Promise<PatientWithHistory | null> {
@@ -536,7 +795,7 @@ export async function searchPatients(
 
 export async function getPatientProfile(
   patientId: string
-): Promise<{ patient: Patient; appointments: Appointment[] } | null> {
+): Promise<{ patient: Patient; appointments: Appointment[]; visitHistory: VisitHistory[] } | null> {
   const { clinicId, db } = await getTenantDb();
 
   const { data: patient, error: patientError } = await db
@@ -549,19 +808,28 @@ export async function getPatientProfile(
   if (patientError) throw new Error(patientError.message);
   if (!patient) return null;
 
-  const { data: appointments, error: appointmentsError } = await db
-    .from('appointments')
-    .select('*')
-    .eq('clinic_id', clinicId)
-    .eq('patient_id', patientId)
-    .order('booked_for', { ascending: false })
-    .order('created_at', { ascending: false });
+  const [appointmentsResult, historyResult] = await Promise.all([
+    db
+      .from('appointments')
+      .select('*')
+      .eq('clinic_id', clinicId)
+      .eq('patient_id', patientId)
+      .order('booked_for', { ascending: false })
+      .order('created_at', { ascending: false }),
+    db
+      .from('visit_history')
+      .select('*')
+      .eq('clinic_id', clinicId)
+      .eq('patient_id', patientId)
+      .order('created_at', { ascending: false }),
+  ]);
 
-  if (appointmentsError) throw new Error(appointmentsError.message);
+  if (appointmentsResult.error) throw new Error(appointmentsResult.error.message);
 
   return {
     patient: patient as Patient,
-    appointments: (appointments ?? []) as Appointment[],
+    appointments: (appointmentsResult.data ?? []) as Appointment[],
+    visitHistory: (historyResult.data ?? []) as VisitHistory[],
   };
 }
 
@@ -615,7 +883,12 @@ export async function getAppointmentByToken(token: number, date?: string): Promi
     .eq('booked_for', targetDate)
     .maybeSingle();
 
-  return (data as QueueItem | null);
+  if (!data) {
+    return null;
+  }
+
+  const [appointment] = await applyPaymentAuditFallback(db, clinicId, [data as QueueItem]);
+  return appointment ?? null;
 }
 
 export async function getPatientAppointments(patientId: string): Promise<Appointment[]> {
@@ -738,7 +1011,7 @@ export async function getAdminStats(date?: string) {
   if (doctor) {
     const dayOfWeek = new Date(targetDate).toLocaleDateString('en-US', { weekday: 'short' }).toLowerCase() as keyof typeof doctor.working_hours;
     const hours = doctor.working_hours[dayOfWeek];
-    if (hours && hours.open && hours.slots.length > 0) {
+    if (hours && hours.slots && hours.slots.length > 0) {
       const totalMins = hours.slots.reduce((sum, slot) => {
         const [startH, startM] = slot.start.split(':').map(Number);
         const [endH, endM] = slot.end.split(':').map(Number);
@@ -932,15 +1205,38 @@ export async function callNextPatient(): Promise<void> {
   revalidatePath(`/${slug}/admin`);
 }
 
-export async function getAppointmentDetails(appointmentId: string): Promise<QueueItem | null> {
+export async function getAppointmentDetails(
+  appointmentId: string
+): Promise<(QueueItem & { recentHistory: VisitHistory[] }) | null> {
   const { clinicId, db } = await getTenantDb();
   const { data } = await db
     .from('appointments')
-    .select('*, patient:patients(*)')
+    .select('*, patient:patients(*), doctor:doctors(*)')
     .eq('id', appointmentId)
     .eq('clinic_id', clinicId)
     .single();
-  return data as QueueItem | null;
+
+  if (!data) {
+    return null;
+  }
+
+  const [appointment] = await applyPaymentAuditFallback(db, clinicId, [data as QueueItem]);
+  if (!appointment) {
+    return null;
+  }
+
+  const { data: recentHistory } = await db
+    .from('visit_history')
+    .select('*')
+    .eq('clinic_id', clinicId)
+    .eq('patient_id', appointment.patient_id)
+    .order('created_at', { ascending: false })
+    .limit(3);
+
+  return {
+    ...appointment,
+    recentHistory: (recentHistory ?? []) as VisitHistory[],
+  };
 }
 
 export async function generateSoapNote(transcript: string) {
@@ -1022,4 +1318,52 @@ export async function saveVisitRecord(
 
   // updateAppointmentStatus handles visit_history insertion when status is 'completed'
   await updateAppointmentStatus(appointmentId, 'completed', summary);
+}
+
+export async function updateAppointmentPayment(
+  appointmentId: string,
+  paymentMode: 'cash' | 'upi',
+  paymentState: 'pending' | 'paid'
+): Promise<{ persisted: boolean; storage: 'appointment' | 'audit' }> {
+  const { clinicId, db } = await getTenantDb();
+  const paymentStatus = paymentState === 'paid' ? 'verified' : 'pending';
+
+  const { error } = await db
+    .from('appointments')
+    .update({
+      payment_mode: paymentMode,
+      payment_status: paymentStatus,
+    })
+    .eq('id', appointmentId)
+    .eq('clinic_id', clinicId)
+    .select('id')
+    .single();
+
+  let storage: 'appointment' | 'audit' = 'appointment';
+
+  if (error) {
+    const missingPaymentColumn =
+      error.message.includes('payment_mode') ||
+      error.message.includes('payment_status');
+
+    if (!missingPaymentColumn) {
+      throw new Error(error.message);
+    }
+
+    storage = 'audit';
+  }
+
+  await auditLog(clinicId, 'receptionist', 'payment_updated', appointmentId, {
+    payment_mode: paymentMode,
+    payment_state: paymentState,
+    payment_status: paymentStatus,
+  });
+
+  const slug = await getClinicSlug(clinicId);
+  revalidatePath(`/${slug}/queue`);
+  revalidatePath(`/${slug}/patients`);
+  revalidatePath(`/${slug}/admin`);
+  revalidatePath(`/${slug}/queue/${appointmentId}/consult`);
+
+  return { persisted: true, storage };
 }

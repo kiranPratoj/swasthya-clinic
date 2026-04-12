@@ -6,6 +6,7 @@ import { useState } from 'react';
 interface Props {
   slug: string;
   doctorName: string;
+  role: 'admin' | 'doctor' | 'receptionist';
 }
 
 const NAV_ITEMS = [
@@ -49,17 +50,6 @@ const NAV_ITEMS = [
     isFab: true,
   },
   {
-    id: 'history',
-    label: 'History',
-    href: (slug: string) => `/${slug}/history`,
-    icon: (
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <circle cx="12" cy="12" r="10" />
-        <polyline points="12 6 12 12 16 14" />
-      </svg>
-    ),
-  },
-  {
     id: 'more',
     label: 'More',
     href: null,
@@ -73,17 +63,30 @@ const NAV_ITEMS = [
   },
 ];
 
-const MORE_ITEMS = [
-  { id: 'admin', label: 'Dashboard', href: (slug: string) => `/${slug}/admin` },
-  { id: 'settings', label: 'Settings', href: (slug: string) => `/${slug}/settings` },
-];
+function getMoreItems(role: Props['role']) {
+  if (role === 'admin') {
+    return [
+      { id: 'settings', label: 'Settings', href: (slug: string) => `/${slug}/settings` },
+      { id: 'history', label: 'History', href: (slug: string) => `/${slug}/history` },
+      { id: 'admin', label: 'Admin', href: (slug: string) => `/${slug}/admin` },
+    ];
+  }
+  if (role === 'doctor') {
+    return [
+      { id: 'settings', label: 'Settings', href: (slug: string) => `/${slug}/settings` },
+      { id: 'history', label: 'History', href: (slug: string) => `/${slug}/history` },
+    ];
+  }
+  return [];
+}
 
-export default function StaffBottomNav({ slug, doctorName }: Props) {
+export default function StaffBottomNav({ slug, doctorName, role }: Props) {
   const pathname = usePathname();
   const [moreOpen, setMoreOpen] = useState(false);
+  const moreItems = getMoreItems(role);
 
   const activeId = NAV_ITEMS.find(item => item.href && pathname.startsWith(item.href(slug)))?.id
-    ?? (MORE_ITEMS.some(m => pathname.startsWith(m.href(slug))) ? 'more' : null);
+    ?? (moreItems.some(m => pathname.startsWith(m.href(slug))) ? 'more' : null);
 
   return (
     <>
@@ -117,7 +120,7 @@ export default function StaffBottomNav({ slug, doctorName }: Props) {
           <div style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '0.75rem', paddingLeft: '0.25rem' }}>
             Dr. {doctorName}
           </div>
-          {MORE_ITEMS.map(item => (
+          {moreItems.map(item => (
             <Link
               key={item.id}
               href={item.href(slug)}

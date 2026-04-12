@@ -1,6 +1,7 @@
 import { notFound } from 'next/navigation';
 import { getAppointmentDetails } from '@/app/actions';
 import ConsultForm from './ConsultForm';
+import { verifyRole } from '@/lib/auth';
 
 export default async function ConsultPage({
   params,
@@ -8,6 +9,7 @@ export default async function ConsultPage({
   params: Promise<{ slug: string; appointmentId: string }>;
 }) {
   const { slug, appointmentId } = await params;
+  await verifyRole(['admin', 'doctor'], slug);
   const appointment = await getAppointmentDetails(appointmentId);
 
   if (!appointment) {
@@ -34,7 +36,7 @@ export default async function ConsultPage({
               fontSize: '0.85rem',
               fontWeight: 700
             }}>
-              Today's Visit
+              Today&apos;s Visit
             </span>
           </div>
         </header>

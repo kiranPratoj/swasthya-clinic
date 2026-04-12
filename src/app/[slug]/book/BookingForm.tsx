@@ -5,6 +5,7 @@ import type { VisitType, VoiceDraft } from '@/lib/types';
 
 type Props = {
   doctorId: string;
+  doctorName: string;
   slug: string;
   clinicName: string;
 };
@@ -28,7 +29,7 @@ function formatDate(iso: string): string {
   });
 }
 
-export default function BookingForm({ doctorId, slug, clinicName }: Props) {
+export default function BookingForm({ doctorId, doctorName, slug, clinicName }: Props) {
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [complaint, setComplaint] = useState('');
@@ -181,7 +182,7 @@ export default function BookingForm({ doctorId, slug, clinicName }: Props) {
         </div>
 
         <div style={{ fontSize: '1rem', color: 'var(--color-text)' }}>
-          <p style={{ fontWeight: '700' }}>Dr. {doctorId === 'mock' ? 'Doctor' : 'Doctor'}</p>
+          <p style={{ fontWeight: '700' }}>Dr. {doctorName.replace(/^\s*dr\.?\s*/i, '').trim()}</p>
           <p style={{ color: 'var(--color-text-muted)', marginTop: '0.25rem' }}>{formatDate(result.bookedFor)}</p>
         </div>
 

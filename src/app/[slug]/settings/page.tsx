@@ -13,10 +13,10 @@ export default async function SettingsPage({ params }: { params: Promise<{ slug:
       <header style={{ marginBottom: '2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
           <h1 style={{ fontSize: '1.75rem', fontWeight: '700', color: 'var(--color-text)' }}>Clinic Settings</h1>
-          <p style={{ color: 'var(--color-text-muted)' }}>Manage your profile, working hours and appointment slots.</p>
+          <p className="mobile-copy-optional" style={{ color: 'var(--color-text-muted)' }}>Manage your profile, working hours and appointment slots.</p>
         </div>
         <Link
-          href={`/${slug}/admin`}
+          href={`/${slug}/queue`}
           style={{
             display: 'inline-flex',
             alignItems: 'center',
@@ -45,7 +45,7 @@ export default async function SettingsPage({ params }: { params: Promise<{ slug:
           >
             <path d="M19 12H5M12 19l-7-7 7-7" />
           </svg>
-          Back to Dashboard
+          Back to Queue
         </Link>
       </header>
 

@@ -1,14 +1,26 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { getPatientHistory } from '@/app/actions';
+import { getPatientHistoryById, searchPatientsByPhone } from '@/app/actions';
 import type { Appointment, AppointmentStatus } from '@/lib/types';
 
 type PatientLookupProps = {
-  onPatientFound: (data: { name: string; phone: string; age: string }) => void;
+  onPatientFound: (data: { id: string; name: string; phone: string; age: string } | null) => void;
+  onCreateNewPatient: (phone: string, options?: { allowSharedMobile?: boolean }) => void;
+};
+
+type PatientSearchResult = {
+  id: string;
+  name: string;
+  phone: string;
+  age: number | null;
+  visitCount: number;
+  lastVisit: string | null;
+  activeToken: number | null;
 };
 
 type LookupState = {
+  patientId: string;
   phone: string;
   history: Appointment[];
   patientName: string;
@@ -16,6 +28,7 @@ type LookupState = {
 };
 
 const INITIAL_STATE: LookupState = {
+  patientId: '',
   phone: '',
   history: [],
   patientName: '',
@@ -23,11 +36,9 @@ const INITIAL_STATE: LookupState = {
 };
 
 function formatDate(value: string): string {
-  return new Date(value).toLocaleDateString('en-IN', {
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-  });
+  const date = new Date(value);
+  const month = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][date.getUTCMonth()] ?? '';
+  return `${date.getUTCDate()} ${month} ${date.getUTCFullYear()}`;
 }
 
 function formatVisitType(value: Appointment['visit_type']): string {
@@ -65,7 +76,10 @@ function getStatusColors(status: AppointmentStatus): { background: string; color
   };
 }
 
-function getPulseStyle(isLoading: boolean, pulsePhase: boolean): { borderColor: string; boxShadow: string } {
+function getPulseStyle(isLoading: boolean, pulsePhase: boolean): {
+  borderColor: string;
+  boxShadow: string;
+} {
   if (!isLoading) {
     return {
       borderColor: 'var(--color-border)',
@@ -75,16 +89,43 @@ function getPulseStyle(isLoading: boolean, pulsePhase: boolean): { borderColor: 
 
   return {
     borderColor: pulsePhase ? 'var(--color-primary)' : 'var(--color-primary-outline)',
-    boxShadow: pulsePhase ? '0 0 0 2px rgba(3, 78, 162, 0.15)' : '0 0 0 1px rgba(3, 78, 162, 0.08)',
+    boxShadow: pulsePhase
+      ? '0 0 0 2px rgba(3, 78, 162, 0.15)'
+      : '0 0 0 1px rgba(3, 78, 162, 0.08)',
   };
 }
 
-export default function PatientLookup({ onPatientFound }: PatientLookupProps) {
+function ArrowRightIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path
+        d="M5 12h14M13 5l7 7-7 7"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+export default function PatientLookup({
+  onPatientFound,
+  onCreateNewPatient,
+}: PatientLookupProps) {
+  const [isMounted, setIsMounted] = useState(false);
   const [lookupPhone, setLookupPhone] = useState('');
+  const [searchResults, setSearchResults] = useState<PatientSearchResult[]>([]);
   const [result, setResult] = useState<LookupState>(INITIAL_STATE);
   const [isLoading, setIsLoading] = useState(false);
   const [pulsePhase, setPulsePhase] = useState(false);
+  const [searchedPhone, setSearchedPhone] = useState('');
   const latestRequestRef = useRef(0);
+  const autoAdvancePhoneRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
 
   useEffect(() => {
     if (!isLoading) {
@@ -103,7 +144,14 @@ export default function PatientLookup({ onPatientFound }: PatientLookupProps) {
   useEffect(() => {
     const normalizedPhone = lookupPhone.replace(/\D/g, '').slice(0, 10);
 
-    if (normalizedPhone.length !== 10) {
+    if (normalizedPhone.length < 3) {
+      latestRequestRef.current += 1;
+      setIsLoading(false);
+      setSearchedPhone('');
+      setSearchResults([]);
+      setResult(INITIAL_STATE);
+      autoAdvancePhoneRef.current = null;
+      onPatientFound(null);
       return;
     }
 
@@ -113,29 +161,34 @@ export default function PatientLookup({ onPatientFound }: PatientLookupProps) {
     const timeoutId = window.setTimeout(() => {
       setIsLoading(true);
 
-      void getPatientHistory(normalizedPhone)
-        .then((history) => {
+      void searchPatientsByPhone(normalizedPhone)
+        .then((patients) => {
           if (latestRequestRef.current !== requestId) {
             return;
           }
 
-          if (history.length === 0) {
+          setSearchedPhone(normalizedPhone);
+          setSearchResults(patients);
+
+          if (patients.length === 0) {
             setResult(INITIAL_STATE);
+            onPatientFound(null);
+
+            if (normalizedPhone.length === 10 && autoAdvancePhoneRef.current !== normalizedPhone) {
+              autoAdvancePhoneRef.current = normalizedPhone;
+              onCreateNewPatient(normalizedPhone);
+            }
             return;
           }
 
-          const firstPatient = history.find((entry) => entry.patient)?.patient;
-          setResult({
-            phone: normalizedPhone,
-            history: history.slice(0, 3),
-            patientName: firstPatient?.name ?? '',
-            patientAge:
-              typeof firstPatient?.age === 'number' ? String(firstPatient.age) : '',
-          });
+          autoAdvancePhoneRef.current = null;
         })
         .catch(() => {
           if (latestRequestRef.current === requestId) {
+            setSearchResults([]);
             setResult(INITIAL_STATE);
+            autoAdvancePhoneRef.current = null;
+            onPatientFound(null);
           }
         })
         .finally(() => {
@@ -143,19 +196,88 @@ export default function PatientLookup({ onPatientFound }: PatientLookupProps) {
             setIsLoading(false);
           }
         });
-    }, 600);
+    }, 350);
 
     return () => {
       window.clearTimeout(timeoutId);
     };
-  }, [lookupPhone]);
+  }, [lookupPhone, onCreateNewPatient, onPatientFound]);
 
   const pulseStyle = useMemo(
     () => getPulseStyle(isLoading, pulsePhase),
     [isLoading, pulsePhase]
   );
 
-  const hasHistory = result.history.length > 0;
+  const hasHistory = isMounted && result.history.length > 0;
+  const exactPhoneMatches =
+    isMounted && searchedPhone.length === 10
+      ? searchResults.filter((match) => match.phone === searchedPhone)
+      : [];
+  const hasExactPhoneMatch = exactPhoneMatches.length > 0;
+
+  async function handleSelectPatient(match: PatientSearchResult) {
+    const requestId = latestRequestRef.current + 1;
+    latestRequestRef.current = requestId;
+    setIsLoading(true);
+    setSearchResults((current) => current);
+
+    try {
+      const history = await getPatientHistoryById(match.id);
+      if (latestRequestRef.current !== requestId) {
+        return;
+      }
+
+      const selectedPatient =
+        history.find((entry) => entry.patient?.id === match.id)?.patient ??
+        history.find((entry) => entry.patient)?.patient;
+
+      const ageValue =
+        typeof selectedPatient?.age === 'number'
+          ? String(selectedPatient.age)
+          : match.age !== null
+            ? String(match.age)
+            : '';
+
+      setResult({
+        patientId: match.id,
+        phone: match.phone,
+        history: history.slice(0, 3),
+        patientName: selectedPatient?.name ?? match.name,
+        patientAge: ageValue,
+      });
+
+      onPatientFound({
+        id: match.id,
+        name: selectedPatient?.name ?? match.name,
+        phone: match.phone,
+        age: ageValue,
+      });
+    } catch {
+      if (latestRequestRef.current !== requestId) {
+        return;
+      }
+
+      const ageValue = match.age !== null ? String(match.age) : '';
+      setResult({
+        patientId: match.id,
+        phone: match.phone,
+        history: [],
+        patientName: match.name,
+        patientAge: ageValue,
+      });
+
+      onPatientFound({
+        id: match.id,
+        name: match.name,
+        phone: match.phone,
+        age: ageValue,
+      });
+    } finally {
+      if (latestRequestRef.current === requestId) {
+        setIsLoading(false);
+      }
+    }
+  }
 
   return (
     <section
@@ -168,15 +290,6 @@ export default function PatientLookup({ onPatientFound }: PatientLookupProps) {
         border: '1px solid var(--color-border)',
       }}
     >
-      <div style={{ display: 'grid', gap: '0.35rem' }}>
-        <h3 style={{ fontSize: '1rem', fontWeight: 800, color: 'var(--color-text)' }}>
-          Patient Lookup
-        </h3>
-        <p style={{ color: 'var(--color-text-muted)', fontSize: '0.92rem' }}>
-          Enter a 10-digit phone number to check if this patient has visited before.
-        </p>
-      </div>
-
       <div style={{ display: 'grid', gap: '0.45rem' }}>
         <label htmlFor="patientLookupPhone" style={{ fontWeight: 700 }}>
           Phone Number
@@ -191,13 +304,17 @@ export default function PatientLookup({ onPatientFound }: PatientLookupProps) {
             const nextPhone = event.target.value.replace(/\D/g, '').slice(0, 10);
             setLookupPhone(nextPhone);
 
-            if (nextPhone.length !== 10) {
+            if (nextPhone.length < 3) {
               latestRequestRef.current += 1;
               setIsLoading(false);
+              setSearchedPhone('');
+              setSearchResults([]);
               setResult(INITIAL_STATE);
+              autoAdvancePhoneRef.current = null;
+              onPatientFound(null);
             }
           }}
-          placeholder="Type 10-digit number"
+          placeholder="Type mobile number"
           style={{
             borderRadius: 'var(--radius-md)',
             border: `1px solid ${pulseStyle.borderColor}`,
@@ -205,9 +322,119 @@ export default function PatientLookup({ onPatientFound }: PatientLookupProps) {
             transition: 'border-color 180ms ease, box-shadow 180ms ease',
           }}
         />
+
+        {hasExactPhoneMatch && (
+          <button
+            type="button"
+            onClick={() => onCreateNewPatient(searchedPhone, { allowSharedMobile: true })}
+            style={{
+              border: '1px solid var(--color-primary-outline)',
+              borderRadius: 'var(--radius-md)',
+              background: 'var(--color-primary-soft)',
+              color: 'var(--color-primary)',
+              padding: '0.8rem 1rem',
+              fontWeight: 800,
+              justifySelf: 'start',
+            }}
+          >
+            Create another patient with same mobile
+          </button>
+        )}
       </div>
 
-      {hasHistory && (
+      {isMounted && !hasHistory && searchResults.length > 0 && (
+        <div
+          style={{
+            background: 'white',
+            borderRadius: 'var(--radius-lg)',
+            border: '1px solid var(--color-border)',
+            padding: '0.75rem',
+            display: 'grid',
+            gap: '0.75rem',
+            boxShadow: 'var(--shadow-sm)',
+          }}
+        >
+          {searchResults.map((match) => (
+            <button
+              key={match.id}
+              type="button"
+              onClick={() => void handleSelectPatient(match)}
+              style={{
+                border: '1px solid var(--color-border)',
+                borderRadius: 'var(--radius-md)',
+                background:
+                  result.patientId === match.id ? 'var(--color-primary-soft)' : 'white',
+                padding: '0.9rem 1rem',
+                textAlign: 'left',
+                display: 'grid',
+                gap: '0.65rem',
+              }}
+            >
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  gap: '0.75rem',
+                  flexWrap: 'wrap',
+                  alignItems: 'center',
+                }}
+              >
+                <div style={{ display: 'grid', gap: '0.35rem', minWidth: 0 }}>
+                  <strong style={{ fontSize: '1rem' }}>{match.name}</strong>
+                  <div
+                    style={{
+                      display: 'flex',
+                      gap: '0.6rem',
+                      flexWrap: 'wrap',
+                      color: 'var(--color-text-muted)',
+                      fontSize: '0.9rem',
+                    }}
+                  >
+                    {match.age !== null && <span>Age {match.age}</span>}
+                    <span>{match.visitCount} visits</span>
+                    {match.lastVisit && <span>Last {formatDate(match.lastVisit)}</span>}
+                    {match.activeToken !== null && (
+                      <span style={{ color: 'var(--color-primary)', fontWeight: 800 }}>
+                        Token #{match.activeToken} active
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '1rem',
+                    flexShrink: 0,
+                  }}
+                >
+                  <span style={{ color: 'var(--color-text-muted)', fontWeight: 700 }}>
+                    {match.phone}
+                  </span>
+                  <span
+                    style={{
+                      width: '2.25rem',
+                      height: '2.25rem',
+                      borderRadius: '999px',
+                      border: '1px solid var(--color-primary-outline)',
+                      background: 'var(--color-primary-soft)',
+                      color: 'var(--color-primary)',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    <ArrowRightIcon />
+                  </span>
+                </div>
+              </div>
+            </button>
+          ))}
+        </div>
+      )}
+
+      {isMounted && hasHistory && (
         <div
           style={{
             background: 'white',
@@ -238,9 +465,16 @@ export default function PatientLookup({ onPatientFound }: PatientLookupProps) {
                   color: 'var(--color-accent)',
                 }}
               >
-                Returning Patient
+                Existing Patient
               </p>
-              <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
+              <div
+                style={{
+                  display: 'flex',
+                  gap: '0.5rem',
+                  alignItems: 'center',
+                  flexWrap: 'wrap',
+                }}
+              >
                 <h4 style={{ fontSize: '1.05rem', fontWeight: 800 }}>
                   {result.patientName || 'Known patient record'}
                 </h4>
@@ -259,6 +493,7 @@ export default function PatientLookup({ onPatientFound }: PatientLookupProps) {
               type="button"
               onClick={() =>
                 onPatientFound({
+                  id: result.patientId,
                   name: result.patientName,
                   phone: result.phone,
                   age: result.patientAge,
@@ -277,6 +512,24 @@ export default function PatientLookup({ onPatientFound }: PatientLookupProps) {
               Use this patient
             </button>
           </div>
+
+          {result.phone && (
+            <button
+              type="button"
+              onClick={() => onCreateNewPatient(result.phone, { allowSharedMobile: true })}
+              style={{
+                border: '1px solid var(--color-primary-outline)',
+                borderRadius: 'var(--radius-md)',
+                background: 'var(--color-primary-soft)',
+                color: 'var(--color-primary)',
+                padding: '0.8rem 1rem',
+                fontWeight: 800,
+                justifySelf: 'start',
+              }}
+            >
+              Create another patient with same mobile
+            </button>
+          )}
 
           <div style={{ display: 'grid', gap: '0.75rem' }}>
             {result.history.map((visit) => {
@@ -344,6 +597,59 @@ export default function PatientLookup({ onPatientFound }: PatientLookupProps) {
           </div>
         </div>
       )}
+
+      {!isLoading &&
+        !hasHistory &&
+        searchedPhone.length >= 3 &&
+        searchedPhone === lookupPhone &&
+        searchResults.length === 0 && (
+          <div
+            style={{
+              background: 'white',
+              borderRadius: 'var(--radius-lg)',
+              border: '1px solid var(--color-border)',
+              padding: '1rem',
+              display: 'grid',
+              gap: '0.9rem',
+              boxShadow: 'var(--shadow-sm)',
+            }}
+          >
+            <div style={{ display: 'grid', gap: '0.3rem' }}>
+              <p
+                style={{
+                  margin: 0,
+                  fontSize: '0.78rem',
+                  fontWeight: 800,
+                  letterSpacing: '0.08em',
+                  textTransform: 'uppercase',
+                  color: 'var(--color-text-muted)',
+                }}
+              >
+                No Match Found
+              </p>
+              <h4 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 800 }}>
+                No patient found for {searchedPhone}
+              </h4>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => onCreateNewPatient(searchedPhone)}
+              style={{
+                border: 'none',
+                borderRadius: 'var(--radius-md)',
+                background: 'var(--color-primary)',
+                color: 'white',
+                padding: '0.8rem 1rem',
+                fontWeight: 800,
+                boxShadow: 'var(--shadow-sm)',
+                justifySelf: 'start',
+              }}
+            >
+              Create New Patient
+            </button>
+          </div>
+        )}
     </section>
   );
 }

@@ -2,6 +2,7 @@ import { headers } from 'next/headers';
 import { getClinicQueue, callNextPatient } from '@/app/actions';
 import QueueDisplay from './QueueDisplay';
 import QueueAutoRefresh from './QueueAutoRefresh';
+import { verifyRole } from '@/lib/auth';
 
 function getTodayIsoDate(): string {
   const now = new Date();
@@ -11,7 +12,9 @@ function getTodayIsoDate(): string {
 
 export default async function QueuePage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
+  await verifyRole(['admin', 'doctor', 'receptionist'], slug);
   const clinicId = (await headers()).get('x-clinic-id');
+  const userRole = ((await headers()).get('x-user-role') ?? 'receptionist') as 'admin' | 'doctor' | 'receptionist';
 
   if (!clinicId) {
     return (
@@ -70,7 +73,7 @@ export default async function QueuePage({ params }: { params: Promise<{ slug: st
           </form>
         )}
 
-        <QueueDisplay initialQueue={queue} clinicId={clinicId} slug={slug} />
+        <QueueDisplay initialQueue={queue} clinicId={clinicId} slug={slug} role={userRole} />
       </div>
     </main>
   );
