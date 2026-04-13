@@ -268,7 +268,7 @@ export default function HomePage() {
                 <div className="medilite-stage-brand">
                   <BrandMark size={34} />
                   <div>
-                    <div className="medilite-stage-title">medilite.ai</div>
+                    <div className="medilite-stage-title">Medilite AI</div>
                     <div className="medilite-stage-kicker">Voice-first clinic flow</div>
                   </div>
                 </div>

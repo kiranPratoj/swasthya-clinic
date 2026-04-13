@@ -1,5 +1,5 @@
 import LoginForm from './LoginForm';
-import BrandMark from '@/components/BrandMark';
+import BrandLockup from '@/components/BrandLockup';
 
 export default function LoginPage({
   searchParams,
@@ -15,8 +15,8 @@ export default function LoginPage({
       <div className="max-w-7xl" style={{ width: '100%', margin: '0 auto', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '2rem', alignItems: 'center' }}>
         <section style={{ display: 'grid', gap: '1rem', padding: '1rem 0' }}>
           <div className="nh-eyebrow">Staff access</div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-            <BrandMark size={72} />
+          <div style={{ display: 'grid', gap: '1rem' }}>
+            <BrandLockup markSize={72} titleSize="lg" />
             <div>
               <h1 style={{ fontSize: '2.8rem', fontWeight: 800, color: 'var(--color-primary)', lineHeight: 1.02, letterSpacing: '-0.04em' }}>
                 Sign in to your clinic.

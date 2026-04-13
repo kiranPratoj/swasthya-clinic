@@ -1,5 +1,5 @@
 import OnboardForm from './OnboardForm';
-import BrandMark from '@/components/BrandMark';
+import BrandLockup from '@/components/BrandLockup';
 
 export default function OnboardPage() {
   return (
@@ -17,16 +17,10 @@ export default function OnboardPage() {
           background: 'linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-hover) 100%)', 
           padding: '1.6rem 2rem', 
           color: 'white',
-          display: 'flex',
-          alignItems: 'center',
+          display: 'grid',
           gap: '1rem'
         }}>
-          <div style={{ 
-            width: '52px', height: '52px', background: 'rgba(255,255,255,0.16)', 
-            borderRadius: '10px', display: 'grid', placeItems: 'center' 
-          }}>
-            <BrandMark size={32} />
-          </div>
+          <BrandLockup markSize={52} titleSize="md" className="medilite-lockup--inverse" />
           <div>
             <div style={{ fontSize: '0.7rem', fontWeight: 800, opacity: 0.82, marginBottom: '0.25rem', letterSpacing: '0.1em', textTransform: 'uppercase' }}>
               Clinic setup

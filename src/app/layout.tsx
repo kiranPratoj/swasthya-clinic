@@ -3,6 +3,7 @@ import './globals.css';
 import Link from 'next/link';
 import { headers } from 'next/headers';
 import BrandMark from '@/components/BrandMark';
+import BrandLockup from '@/components/BrandLockup';
 
 export const metadata: Metadata = {
   title: 'medilite.ai | Smart clinic flow for modern care',
@@ -20,13 +21,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           <div className="max-w-7xl px-4 bda-header-shell">
             <div className="bda-header-main">
               <Link href="/" className="bda-brand">
-                <div className="bda-seal" aria-hidden="true">
-                  <BrandMark size={56} />
-                </div>
-                <div className="bda-brand-text">
-                  <span className="bda-brand-english">medilite.ai</span>
-                  <span className="bda-brand-kicker">Smart clinic flow for modern care</span>
-                </div>
+                <BrandLockup markSize={50} titleSize="sm" className="bda-brand-lockup" />
                 <div className="bda-prism-badge">VOICE-FIRST</div>
               </Link>
 
@@ -108,14 +103,14 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                     <BrandMark size={36} />
                   </div>
                   <div>
-                    <div className="bda-footer-title">medilite.ai</div>
-                    <div className="bda-footer-powered">Powered by Sarvam AI</div>
+                    <div className="bda-footer-title">Medilite AI</div>
+                    <div className="bda-footer-powered">powered by Sarvam AI</div>
                   </div>
                 </div>
                 <div style={{ color: 'var(--color-text-muted)', maxWidth: '28rem' }}>
                   Voice-first clinic flow, continuity, and doctor-supportive AI for modern Indian clinics.
                 </div>
-                <div className="bda-footer-legal">© 2026 medilite.ai. All rights reserved.</div>
+                <div className="bda-footer-legal">© 2026 Medilite AI. All rights reserved.</div>
               </div>
             </div>
             <div className="bda-footer-links">
