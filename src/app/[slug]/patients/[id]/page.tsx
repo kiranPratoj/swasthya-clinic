@@ -1,5 +1,4 @@
 import Link from 'next/link';
-import { headers } from 'next/headers';
 import { notFound } from 'next/navigation';
 import { getPatientProfile } from '@/app/actions';
 import type { Appointment, VisitHistory } from '@/lib/types';
@@ -234,12 +233,8 @@ export default async function PatientProfilePage({
   searchParams: Promise<{ page?: string }>;
 }) {
   const { slug, id } = await params;
-  await verifyRole(['admin', 'doctor', 'receptionist'], slug);
-
-  const role = ((await headers()).get('x-user-role') ?? 'receptionist') as
-    | 'admin'
-    | 'doctor'
-    | 'receptionist';
+  const session = await verifyRole(['admin', 'doctor', 'receptionist'], slug);
+  const role = session.role;
 
   const { page } = await searchParams;
   const pageNumber = Math.max(1, Number.parseInt(page ?? '1', 10) || 1);

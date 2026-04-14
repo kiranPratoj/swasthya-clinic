@@ -140,6 +140,11 @@ export default function PatientIntakeForm({
   const [detailsStepLabel, setDetailsStepLabel] = useState<'new' | 'existing' | 'shared-mobile'>('new');
   const [paymentMode, setPaymentMode] = useState<'cash' | 'upi'>('cash');
   const [paymentStatus, setPaymentStatus] = useState<'pending' | 'paid'>('pending');
+  const [patientNameDirty, setPatientNameDirty] = useState(false);
+  const [ageDirty, setAgeDirty] = useState(false);
+  const [phoneDirty, setPhoneDirty] = useState(false);
+  const [visitTypeDirty, setVisitTypeDirty] = useState(false);
+  const [complaintDirty, setComplaintDirty] = useState(false);
 
   const bookedFor = getTodayIsoDate();
   const missingFields = voiceDraft?.structuredData.missingFields ?? [];
@@ -180,16 +185,28 @@ export default function PatientIntakeForm({
 
   function applyStructuredData(structuredData: PatientIntakeDraft) {
     setPatientName((current) =>
-      selectedPatientId ? current : structuredData.patientName ?? current
+      selectedPatientId || patientNameDirty || current.trim()
+        ? current
+        : structuredData.patientName ?? current
     );
     setAge((current) =>
-      selectedPatientId ? current : structuredData.age ?? current
+      selectedPatientId || ageDirty || current.trim()
+        ? current
+        : structuredData.age ?? current
     );
     setPhone((current) =>
-      selectedPatientId ? current : structuredData.phone ?? current
+      selectedPatientId || phoneDirty || current.trim()
+        ? current
+        : structuredData.phone ?? current
     );
-    setComplaint((current) => structuredData.complaint ?? current);
-    setVisitType((current) => structuredData.visitType ?? current);
+    setComplaint((current) =>
+      complaintDirty || current.trim() ? current : structuredData.complaint ?? current
+    );
+    setVisitType((current) =>
+      visitTypeDirty || current !== 'walk-in'
+        ? current
+        : structuredData.visitType ?? current
+    );
 
     if (autofillFlashTimerRef.current !== null) {
       window.clearTimeout(autofillFlashTimerRef.current);
@@ -451,6 +468,11 @@ export default function PatientIntakeForm({
     setConfirmedToken(null);
     setDetailsStepVisible(false);
     setDetailsStepLabel('new');
+    setPatientNameDirty(false);
+    setAgeDirty(false);
+    setPhoneDirty(false);
+    setVisitTypeDirty(false);
+    setComplaintDirty(false);
   }
 
   const handleExistingPatientFound = useCallback(
@@ -465,6 +487,11 @@ export default function PatientIntakeForm({
         setVisitType('walk-in');
         setDetailsStepVisible(false);
         setDetailsStepLabel('new');
+        setPatientNameDirty(false);
+        setAgeDirty(false);
+        setPhoneDirty(false);
+        setVisitTypeDirty(false);
+        setComplaintDirty(false);
         return;
       }
 
@@ -478,6 +505,11 @@ export default function PatientIntakeForm({
       setSubmitError(null);
       setDetailsStepVisible(true);
       setDetailsStepLabel('existing');
+      setPatientNameDirty(false);
+      setAgeDirty(false);
+      setPhoneDirty(false);
+      setVisitTypeDirty(false);
+      setComplaintDirty(false);
     },
     []
   );
@@ -496,6 +528,11 @@ export default function PatientIntakeForm({
     setSubmitError(null);
     setDetailsStepVisible(true);
     setDetailsStepLabel(options?.allowSharedMobile ? 'shared-mobile' : 'new');
+    setPatientNameDirty(false);
+    setAgeDirty(false);
+    setPhoneDirty(false);
+    setVisitTypeDirty(false);
+    setComplaintDirty(false);
   }, []);
 
   if (confirmedToken !== null) {
@@ -980,7 +1017,10 @@ export default function PatientIntakeForm({
                     name="patientName"
                     type="text"
                     value={patientName}
-                    onChange={(event) => setPatientName(event.target.value)}
+                    onChange={(event) => {
+                      setPatientName(event.target.value);
+                      setPatientNameDirty(true);
+                    }}
                     required
                     placeholder="Enter patient name"
                   />
@@ -1000,7 +1040,10 @@ export default function PatientIntakeForm({
                     min="0"
                     inputMode="numeric"
                     value={age}
-                    onChange={(event) => setAge(event.target.value)}
+                    onChange={(event) => {
+                      setAge(event.target.value);
+                      setAgeDirty(true);
+                    }}
                     placeholder="Optional"
                   />
                 )}
@@ -1019,6 +1062,7 @@ export default function PatientIntakeForm({
                     value={phone}
                     onChange={(event) => {
                       setPhone(event.target.value);
+                      setPhoneDirty(true);
                       setSelectedPatientId('');
                       setAllowSharedMobileNewPatient(false);
                       if (detailsStepLabel === 'shared-mobile') {
@@ -1041,7 +1085,10 @@ export default function PatientIntakeForm({
                     id="visitType"
                     name="visitType"
                     value={visitType}
-                    onChange={(event) => setVisitType(event.target.value as VisitType)}
+                    onChange={(event) => {
+                      setVisitType(event.target.value as VisitType);
+                      setVisitTypeDirty(true);
+                    }}
                   >
                     {VISIT_TYPE_OPTIONS.map((option) => (
                       <option key={option.value} value={option.value}>
@@ -1064,7 +1111,10 @@ export default function PatientIntakeForm({
                   name="complaint"
                   rows={5}
                   value={complaint}
-                  onChange={(event) => setComplaint(event.target.value)}
+                  onChange={(event) => {
+                    setComplaint(event.target.value);
+                    setComplaintDirty(true);
+                  }}
                   required
                   placeholder="Describe the chief complaint"
                   style={{ resize: 'vertical' }}
