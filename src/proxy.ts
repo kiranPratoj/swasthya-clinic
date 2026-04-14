@@ -28,8 +28,12 @@ function isPublicSlugPath(pathname: string): boolean {
 function getSlugFromHost(host: string): string | null {
   const bare = host.split(':')[0];
   const parts = bare.split('.');
-  if (parts.length === 3 && !bare.endsWith('.vercel.app')) return parts[0];
-  if (parts.length >= 4 && bare.endsWith('.vercel.app')) return parts[0];
+  if (parts.length === 3 && !bare.endsWith('.vercel.app')) {
+    return parts[0] === 'www' ? null : parts[0];
+  }
+  if (parts.length >= 4 && bare.endsWith('.vercel.app')) {
+    return parts[0] === 'www' ? null : parts[0];
+  }
   return null;
 }
 
