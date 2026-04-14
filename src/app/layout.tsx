@@ -28,14 +28,17 @@ export default async function RootLayout({ children }: { children: React.ReactNo
               {!isClinicScopedPage && (
                 <>
                 <nav className="bda-nav bda-nav--desktop">
-                  <Link href="/#problem" className="bda-nav-link bda-nav-link--ghost">
-                    The Problem
+                  <Link href="/#wa-intake" className="bda-nav-link bda-nav-link--ghost">
+                    WhatsApp Intake
                   </Link>
-                  <Link href="/#workflow" className="bda-nav-link bda-nav-link--ghost">
-                    How it Works
+                  <Link href="/#live-queue" className="bda-nav-link bda-nav-link--ghost">
+                    Live Queue
                   </Link>
-                  <Link href="/#ai" className="bda-nav-link bda-nav-link--ghost">
-                    AI Support
+                  <Link href="/#ai-scribe" className="bda-nav-link bda-nav-link--ghost">
+                    AI Scribe
+                  </Link>
+                  <Link href="/#discharge" className="bda-nav-link bda-nav-link--ghost">
+                    Discharge
                   </Link>
                   <NavDemoButton />
                 </nav>
@@ -43,17 +46,17 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                   <details className="bda-mobile-menu">
                     <summary className="bda-mobile-menu-trigger">Menu</summary>
                     <div className="bda-mobile-menu-panel">
-                      <Link href="/#problem" className="bda-mobile-menu-link">
-                        The Problem
+                      <Link href="/#wa-intake" className="bda-mobile-menu-link">
+                        WhatsApp Intake
                       </Link>
-                      <Link href="/#workflow" className="bda-mobile-menu-link">
-                        How it Works
+                      <Link href="/#live-queue" className="bda-mobile-menu-link">
+                        Live Queue
                       </Link>
-                      <Link href="/#ai" className="bda-mobile-menu-link">
-                        AI Support
+                      <Link href="/#ai-scribe" className="bda-mobile-menu-link">
+                        AI Scribe
                       </Link>
-                      <Link href="/#workflow" className="bda-mobile-menu-link">
-                        See Workflow
+                      <Link href="/#discharge" className="bda-mobile-menu-link">
+                        Discharge
                       </Link>
                     </div>
                   </details>
@@ -107,8 +110,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
               <div>
                 <div className="bda-footer-heading">Contact</div>
                 <div className="bda-footer-link-list">
-                  <a href="mailto:hello@medilite.ai" className="nh-link">hello@medilite.ai</a>
-                  <a href="tel:+919000000000" className="nh-link">+91 90000 00000</a>
+                  <a href="mailto:Admin@wingspirelabs.com" className="nh-link">Admin@wingspirelabs.com</a>
                   <Link href="/login" className="nh-link">Staff Login</Link>
                 </div>
               </div>
