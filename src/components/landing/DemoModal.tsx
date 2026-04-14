@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { ShieldCheck, Mic, Activity, CheckCircle2, X } from 'lucide-react';
 import { submitDemoRequest } from '@/app/actions';
 
@@ -16,6 +17,7 @@ const BENEFITS = [
 ];
 
 export default function DemoModal({ isOpen, onClose }: DemoModalProps) {
+  const [mounted, setMounted] = useState(false);
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [clinicName, setClinicName] = useState('');
@@ -23,6 +25,8 @@ export default function DemoModal({ isOpen, onClose }: DemoModalProps) {
   const [isSuccess, setIsSuccess] = useState(false);
   const [fieldError, setFieldError] = useState('');
   const firstInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => { setMounted(true); }, []);
 
   // Lock body scroll when open
   useEffect(() => {
@@ -65,9 +69,9 @@ export default function DemoModal({ isOpen, onClose }: DemoModalProps) {
     }
   }
 
-  if (!isOpen) return null;
+  if (!isOpen || !mounted) return null;
 
-  return (
+  return createPortal(
     <div
       style={{
         position: 'fixed',
@@ -397,6 +401,7 @@ export default function DemoModal({ isOpen, onClose }: DemoModalProps) {
           )}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
