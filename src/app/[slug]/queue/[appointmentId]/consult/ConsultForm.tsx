@@ -43,6 +43,25 @@ function extractHeadline(summary: string): string {
   return summary.split('\n')[0]?.trim() || 'Previous visit';
 }
 
+function buildSoapFallback(transcript: string): SOAPNote {
+  const cleaned = transcript.trim();
+  if (!cleaned) {
+    return {
+      subjective: '',
+      objective: '',
+      assessment: '',
+      plan: '',
+    };
+  }
+
+  return {
+    subjective: cleaned,
+    objective: 'Doctor review required.',
+    assessment: 'AI draft unavailable. Please confirm the diagnosis manually.',
+    plan: 'Review the transcript, complete the prescription, and set a follow-up reminder if needed.',
+  };
+}
+
 export default function ConsultForm({ appointment, slug }: Props) {
   const router = useRouter();
   const doctorName = formatDoctorName(appointment.doctor?.name);
@@ -63,6 +82,10 @@ export default function ConsultForm({ appointment, slug }: Props) {
   const [followUpDate, setFollowUpDate] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showPrintView, setShowPrintView] = useState(false);
+
+  const printablePrescription = prescription.filter(
+    (entry) => entry.drug.trim() || entry.dose.trim() || entry.frequency.trim()
+  );
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
@@ -110,11 +133,16 @@ export default function ConsultForm({ appointment, slug }: Props) {
       fd.append('audio', blob, 'consult.webm');
       fd.append('durationMs', String(durationMs));
       
-      const res = await fetch('/api/transcribe-chunk', { // Reusing chunk logic for simplicity if no full transcribe API
+      const res = await fetch('/api/consult-voice', {
         method: 'POST',
         body: fd
       });
-      const { transcript: text } = await res.json();
+      const payload = (await res.json()) as { transcript?: string; error?: string };
+      if (!res.ok) {
+        throw new Error(payload.error ?? 'Could not transcribe consultation audio.');
+      }
+
+      const text = payload.transcript ?? '';
       setTranscript(text);
 
       if (text) {
@@ -133,12 +161,9 @@ export default function ConsultForm({ appointment, slug }: Props) {
               : [{ drug: '', dose: '', frequency: '' }]
           );
         } catch {
-          setSoap({
-            subjective: text || 'Patient presented with complaint.',
-            objective: 'Vital signs stable. Physical examination findings noted.',
-            assessment: 'Diagnosis based on clinical presentation and symptoms.',
-            plan: 'Prescribe medication as appropriate. Follow up in 1 week.',
-          });
+          setSoap(buildSoapFallback(text));
+          setDiagnosis('');
+          setPrescription([{ drug: '', dose: '', frequency: '' }]);
         }
       }
     } catch (err) {
@@ -181,7 +206,7 @@ export default function ConsultForm({ appointment, slug }: Props) {
       <div style={{ background: 'white', padding: '2rem', borderRadius: 'var(--radius-lg)', boxShadow: 'var(--shadow-md)' }}>
         <div className="print-only">
           <div style={{ textAlign: 'center', marginBottom: '2rem', borderBottom: '2px solid var(--color-primary)', paddingBottom: '1rem' }}>
-            <h1 style={{ color: 'var(--color-primary)', margin: 0 }}>Sarvam Clinic</h1>
+            <h1 style={{ color: 'var(--color-primary)', margin: 0 }}>Medilite AI</h1>
             <p style={{ margin: '0.25rem 0' }}>Visit Summary</p>
           </div>
           
@@ -200,34 +225,38 @@ export default function ConsultForm({ appointment, slug }: Props) {
 
           <div style={{ marginBottom: '1.5rem' }}>
             <h3 style={{ borderBottom: '1px solid #eee', paddingBottom: '0.25rem' }}>Diagnosis</h3>
-            <p>{diagnosis}</p>
+            <p>{diagnosis.trim() || 'Not recorded'}</p>
           </div>
 
           <div style={{ marginBottom: '1.5rem' }}>
             <h3 style={{ borderBottom: '1px solid #eee', paddingBottom: '0.25rem' }}>Prescription</h3>
-            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-              <thead>
-                <tr style={{ textAlign: 'left', background: '#f9f9f9' }}>
-                  <th style={{ padding: '0.5rem' }}>Drug Name</th>
-                  <th style={{ padding: '0.5rem' }}>Dosage</th>
-                  <th style={{ padding: '0.5rem' }}>Frequency</th>
-                </tr>
-              </thead>
-              <tbody>
-                {prescription.map((p, i) => (
-                  <tr key={i} style={{ borderBottom: '1px solid #eee' }}>
-                    <td style={{ padding: '0.5rem' }}>{p.drug}</td>
-                    <td style={{ padding: '0.5rem' }}>{p.dose}</td>
-                    <td style={{ padding: '0.5rem' }}>{p.frequency}</td>
+            {printablePrescription.length > 0 ? (
+              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                <thead>
+                  <tr style={{ textAlign: 'left', background: '#f9f9f9' }}>
+                    <th style={{ padding: '0.5rem' }}>Drug Name</th>
+                    <th style={{ padding: '0.5rem' }}>Dosage</th>
+                    <th style={{ padding: '0.5rem' }}>Frequency</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {printablePrescription.map((p, i) => (
+                    <tr key={i} style={{ borderBottom: '1px solid #eee' }}>
+                      <td style={{ padding: '0.5rem' }}>{p.drug}</td>
+                      <td style={{ padding: '0.5rem' }}>{p.dose}</td>
+                      <td style={{ padding: '0.5rem' }}>{p.frequency}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            ) : (
+              <p>No medicines recorded.</p>
+            )}
           </div>
 
           {followUpDate && (
             <div style={{ marginBottom: '2rem' }}>
-              <p><strong>Follow-up Date:</strong> {followUpDate}</p>
+              <p><strong>Follow-up Reminder:</strong> {followUpDate}</p>
             </div>
           ) }
 
@@ -241,7 +270,7 @@ export default function ConsultForm({ appointment, slug }: Props) {
         <div className="print-hidden" style={{ textAlign: 'center', display: 'grid', gap: '1rem' }}>
           <div style={{ fontSize: '3rem' }}>✅</div>
           <h2>Consultation Completed</h2>
-          <p>The record has been saved to visit history.</p>
+          <p>The visit has been saved and is ready to print.</p>
           <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center' }}>
             <button 
               onClick={() => window.print()}
@@ -499,7 +528,7 @@ export default function ConsultForm({ appointment, slug }: Props) {
           </div>
 
           <div>
-            <label>Follow-up Date</label>
+            <label>Follow-up Reminder</label>
             <input
               type="date"
               value={followUpDate}

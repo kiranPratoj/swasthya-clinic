@@ -42,7 +42,7 @@ function extractPrescription(summary: string): string[] {
 }
 
 function extractFollowUp(summary: string): string {
-  const match = summary.match(/^Follow-up Date:\s*(.+)/m);
+  const match = summary.match(/^Follow-up (?:Date|Reminder):\s*(.+)/m);
   return match?.[1]?.trim() ?? '';
 }
 

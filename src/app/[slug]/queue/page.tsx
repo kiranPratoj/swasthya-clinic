@@ -13,9 +13,9 @@ function getTodayIsoDate(): string {
 
 export default async function QueuePage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
-  await verifyRole(['admin', 'doctor', 'receptionist'], slug);
+  const session = await verifyRole(['admin', 'doctor', 'receptionist'], slug);
   const clinicId = (await headers()).get('x-clinic-id');
-  const userRole = ((await headers()).get('x-user-role') ?? 'receptionist') as 'admin' | 'doctor' | 'receptionist';
+  const userRole = session.role;
 
   if (!clinicId) {
     return (

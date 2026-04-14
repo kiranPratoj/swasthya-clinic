@@ -3,6 +3,7 @@
 import { headers } from 'next/headers';
 import { revalidatePath } from 'next/cache';
 import { getDb, getClinicDb, auditLog } from '@/lib/db';
+import { requireSession } from '@/lib/auth';
 import type {
   Appointment,
   AppointmentStatus,
@@ -32,6 +33,11 @@ async function getClinicSlug(clinicId: string): Promise<string> {
 async function getTenantDb(): Promise<{ clinicId: string; db: ReturnType<typeof getClinicDb> }> {
   const clinicId = await getClinicId();
   return { clinicId, db: getClinicDb(clinicId) };
+}
+
+async function getActorRole(): Promise<'admin' | 'doctor' | 'receptionist'> {
+  const session = await requireSession();
+  return session.role;
 }
 
 // ─── Clinic onboarding ────────────────────────────────────────────────────────
@@ -84,6 +90,7 @@ export async function checkSlugAvailable(slug: string): Promise<boolean> {
 
 export async function createAppointment(formData: FormData): Promise<{ appointmentId: string; tokenNumber: number; slug: string }> {
   const { clinicId, db } = await getTenantDb();
+  const actorRole = await getActorRole();
 
   const existingPatientId = (formData.get('patientId') as string | null)?.trim() || null;
   const allowSharedMobileNewPatient = formData.get('allowSharedMobileNewPatient') === 'true';
@@ -222,7 +229,7 @@ export async function createAppointment(formData: FormData): Promise<{ appointme
     throw new Error('Failed to create appointment.');
   }
 
-  await auditLog(clinicId, 'receptionist', 'appointment_created', apptId, { tokenNumber, visitType });
+  await auditLog(clinicId, actorRole, 'appointment_created', apptId, { tokenNumber, visitType });
 
   // Get slug for redirect
   const { data: clinic } = await db.from('clinics').select('slug').eq('id', clinicId).single();
@@ -239,6 +246,7 @@ export async function updateAppointmentStatus(
   notes?: string
 ): Promise<void> {
   const { clinicId, db } = await getTenantDb();
+  const actorRole = await getActorRole();
 
   const update: Partial<Appointment> = { status };
   if (notes !== undefined) update.notes = notes;
@@ -263,7 +271,7 @@ export async function updateAppointmentStatus(
     });
   }
 
-  await auditLog(clinicId, 'doctor', 'status_updated', appointmentId, { status, notes });
+  await auditLog(clinicId, actorRole, 'status_updated', appointmentId, { status, notes });
 
   const slug = await getClinicSlug(clinicId);
   revalidatePath(`/${slug}/queue`);
@@ -275,6 +283,7 @@ export async function cancelAppointment(
   reason?: string
 ): Promise<void> {
   const { clinicId, db } = await getTenantDb();
+  const actorRole = await getActorRole();
 
   const { error } = await db
     .from('appointments')
@@ -286,7 +295,7 @@ export async function cancelAppointment(
 
   if (error) throw new Error(error.message);
 
-  await auditLog(clinicId, 'receptionist', 'appointment_cancelled', appointmentId, {
+  await auditLog(clinicId, actorRole, 'appointment_cancelled', appointmentId, {
     reason: reason?.trim() || null,
   });
 
@@ -297,6 +306,7 @@ export async function cancelAppointment(
 
 export async function markNoShow(appointmentId: string): Promise<void> {
   const { clinicId, db } = await getTenantDb();
+  const actorRole = await getActorRole();
 
   const { error } = await db
     .from('appointments')
@@ -308,7 +318,7 @@ export async function markNoShow(appointmentId: string): Promise<void> {
 
   if (error) throw new Error(error.message);
 
-  await auditLog(clinicId, 'receptionist', 'appointment_no_show', appointmentId);
+  await auditLog(clinicId, actorRole, 'appointment_no_show', appointmentId);
 
   const slug = await getClinicSlug(clinicId);
   revalidatePath(`/${slug}/queue`);
@@ -321,6 +331,7 @@ export async function rescheduleAppointment(
   reason?: string
 ): Promise<{ newAppointmentId: string; newToken: number }> {
   const { clinicId, db } = await getTenantDb();
+  const actorRole = await getActorRole();
   const normalizedDate = newDate.trim();
 
   if (!/^\d{4}-\d{2}-\d{2}$/.test(normalizedDate)) {
@@ -375,13 +386,13 @@ export async function rescheduleAppointment(
 
   if (updateError) throw new Error(updateError.message);
 
-  await auditLog(clinicId, 'receptionist', 'appointment_rescheduled_old', appointmentId, {
+  await auditLog(clinicId, actorRole, 'appointment_rescheduled_old', appointmentId, {
     newAppointmentId: newAppointment.id,
     oldDate: currentAppointment.booked_for,
     newDate: normalizedDate,
     reason: reason?.trim() || null,
   });
-  await auditLog(clinicId, 'receptionist', 'appointment_rescheduled_new', newAppointment.id, {
+  await auditLog(clinicId, actorRole, 'appointment_rescheduled_new', newAppointment.id, {
     previousAppointmentId: appointmentId,
     newToken,
     oldDate: currentAppointment.booked_for,
@@ -1173,6 +1184,7 @@ export async function raisePatientIssue(
 
 export async function callNextPatient(): Promise<void> {
   const { clinicId, db } = await getTenantDb();
+  const actorRole = await getActorRole();
   const today = new Date().toISOString().split('T')[0];
 
   // Find the first waiting appointment (booked or confirmed) for today
@@ -1198,7 +1210,7 @@ export async function callNextPatient(): Promise<void> {
 
   if (updateError) throw new Error(updateError.message);
 
-  await auditLog(clinicId, 'doctor', 'called_next', nextAppt.id);
+  await auditLog(clinicId, actorRole, 'called_next', nextAppt.id);
 
   const slug = await getClinicSlug(clinicId);
   revalidatePath(`/${slug}/queue`);
@@ -1299,20 +1311,26 @@ export async function saveVisitRecord(
   prescription: Array<{ drug: string; dose: string; frequency: string }>,
   followUpDate?: string
 ): Promise<void> {
+  const cleanedPrescription = prescription.filter(
+    (entry) => entry.drug.trim() || entry.dose.trim() || entry.frequency.trim()
+  );
+
   // Construct a comprehensive summary for visit_history
   const summaryParts = [
-    `Diagnosis: ${diagnosis}`,
+    `Diagnosis: ${diagnosis.trim() || 'Not recorded'}`,
     `\nSOAP Note:`,
-    `Subjective: ${soap.subjective}`,
-    `Objective: ${soap.objective}`,
-    `Assessment: ${soap.assessment}`,
-    `Plan: ${soap.plan}`,
+    `Subjective: ${soap.subjective.trim() || 'Not recorded'}`,
+    `Objective: ${soap.objective.trim() || 'Not recorded'}`,
+    `Assessment: ${soap.assessment.trim() || 'Not recorded'}`,
+    `Plan: ${soap.plan.trim() || 'Not recorded'}`,
     `\nPrescription:`,
-    ...prescription.map(p => `- ${p.drug}: ${p.dose} (${p.frequency})`),
+    ...(cleanedPrescription.length > 0
+      ? cleanedPrescription.map((p) => `- ${p.drug.trim()}: ${p.dose.trim()} (${p.frequency.trim()})`)
+      : ['- No medicines recorded']),
   ];
   
   if (followUpDate) {
-    summaryParts.push(`\nFollow-up Date: ${followUpDate}`);
+    summaryParts.push(`\nFollow-up Reminder: ${followUpDate}`);
   }
   
   const summary = summaryParts.join('\n');
@@ -1327,6 +1345,7 @@ export async function updateAppointmentPayment(
   paymentState: 'pending' | 'paid'
 ): Promise<{ persisted: boolean; storage: 'appointment' | 'audit' }> {
   const { clinicId, db } = await getTenantDb();
+  const actorRole = await getActorRole();
   const paymentStatus = paymentState === 'paid' ? 'verified' : 'pending';
 
   const { error } = await db
@@ -1354,7 +1373,7 @@ export async function updateAppointmentPayment(
     storage = 'audit';
   }
 
-  await auditLog(clinicId, 'receptionist', 'payment_updated', appointmentId, {
+  await auditLog(clinicId, actorRole, 'payment_updated', appointmentId, {
     payment_mode: paymentMode,
     payment_state: paymentState,
     payment_status: paymentStatus,

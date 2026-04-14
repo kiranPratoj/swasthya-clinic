@@ -7,6 +7,39 @@ function normalizeNullableText(value: unknown): string | null {
   return trimmed || null;
 }
 
+function normalizePatientName(value: unknown): string | null {
+  const raw = normalizeNullableText(value);
+  if (!raw) return null;
+
+  const cleaned = raw
+    .replace(/\s+/g, ' ')
+    .replace(/[,:;]+$/g, '')
+    .trim();
+
+  if (!cleaned) return null;
+  if (/[0-9]/.test(cleaned)) return null;
+  if (/[?!.।,\n]/.test(cleaned)) return null;
+
+  const lowered = cleaned.toLowerCase();
+  if (
+    lowered.includes('mobile') ||
+    lowered.includes('phone') ||
+    lowered.includes('complaint') ||
+    lowered.includes('visit') ||
+    lowered.includes('patient name') ||
+    lowered.includes('ರೋಗಿ') ||
+    lowered.includes('ಹೆಸರು') ||
+    lowered.includes('ವಯಸ್ಸು')
+  ) {
+    return null;
+  }
+
+  const words = cleaned.split(/\s+/);
+  if (words.length > 5) return null;
+
+  return cleaned;
+}
+
 function normalizePhone(value: unknown): string | null {
   const raw = normalizeNullableText(value);
   if (!raw) return null;
@@ -30,6 +63,27 @@ function normalizeVisitType(value: unknown): VisitType | null {
   if (raw.includes('book')) return 'booked';
   if (raw.includes('walk')) return 'walk-in';
   return null;
+}
+
+function normalizeComplaint(value: unknown): string | null {
+  const raw = normalizeNullableText(value);
+  if (!raw) return null;
+
+  const cleaned = raw.replace(/\s+/g, ' ').trim();
+  if (!cleaned) return null;
+  if (looksLikeQuestionSegment(cleaned)) return null;
+
+  const lowered = cleaned.toLowerCase();
+  if (
+    lowered.startsWith('patient name') ||
+    lowered.startsWith('phone') ||
+    lowered.startsWith('mobile') ||
+    lowered.startsWith('visit type')
+  ) {
+    return null;
+  }
+
+  return cleaned.length > 160 ? cleaned.slice(0, 160).trim() : cleaned;
 }
 
 function splitTranscriptSegments(text: string): string[] {
@@ -183,8 +237,8 @@ Only call the function. Do not answer in plain text.`,
     structuredData = {
       ...structuredData,
       patientName:
-        normalizeNullableText(parsed.patientName) ??
-        normalizeNullableText(parsed.patient_name) ??
+        normalizePatientName(parsed.patientName) ??
+        normalizePatientName(parsed.patient_name) ??
         heuristic.patientName ??
         null,
       age:
@@ -197,7 +251,7 @@ Only call the function. Do not answer in plain text.`,
         heuristic.phone ??
         null,
       complaint:
-        normalizeNullableText(parsed.complaint) ??
+        normalizeComplaint(parsed.complaint) ??
         heuristic.complaint ??
         null,
       visitType:
