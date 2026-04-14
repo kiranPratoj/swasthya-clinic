@@ -86,6 +86,15 @@ export async function checkSlugAvailable(slug: string): Promise<boolean> {
   return !data;
 }
 
+export async function getClinicName(slug: string): Promise<string> {
+  const { data } = await getDb()
+    .from('clinics')
+    .select('name')
+    .eq('slug', slug)
+    .maybeSingle();
+  return data?.name ?? 'Clinic';
+}
+
 // ─── Appointments ─────────────────────────────────────────────────────────────
 
 export async function createAppointment(formData: FormData): Promise<{ appointmentId: string; tokenNumber: number; slug: string }> {

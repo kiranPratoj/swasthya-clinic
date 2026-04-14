@@ -1,5 +1,5 @@
 import { notFound } from 'next/navigation';
-import { getAppointmentDetails } from '@/app/actions';
+import { getAppointmentDetails, getClinicName } from '@/app/actions';
 import ConsultForm from './ConsultForm';
 import { verifyRole } from '@/lib/auth';
 
@@ -10,7 +10,10 @@ export default async function ConsultPage({
 }) {
   const { slug, appointmentId } = await params;
   await verifyRole(['admin', 'doctor'], slug);
-  const appointment = await getAppointmentDetails(appointmentId);
+  const [appointment, clinicName] = await Promise.all([
+    getAppointmentDetails(appointmentId),
+    getClinicName(slug),
+  ]);
 
   if (!appointment) {
     notFound();
@@ -41,7 +44,7 @@ export default async function ConsultPage({
           </div>
         </header>
 
-        <ConsultForm appointment={appointment} slug={slug} />
+        <ConsultForm appointment={appointment} slug={slug} clinicName={clinicName} />
       </div>
     </main>
   );
