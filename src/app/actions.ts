@@ -1368,3 +1368,31 @@ export async function updateAppointmentPayment(
 
   return { persisted: true, storage };
 }
+
+// ─── Demo Request ─────────────────────────────────────────────────────────────
+
+export async function submitDemoRequest(input: {
+  name: string;
+  phone: string;
+  clinicName?: string;
+}): Promise<{ success: boolean; error?: string }> {
+  const { name, phone, clinicName } = input;
+
+  if (!name.trim() || !phone.trim()) {
+    return { success: false, error: 'Name and phone are required.' };
+  }
+
+  const db = getDb();
+  const { error } = await db.from('demo_requests').insert({
+    name: name.trim(),
+    phone: phone.trim(),
+    clinic_name: clinicName?.trim() || null,
+  });
+
+  if (error) {
+    console.error('[submitDemoRequest]', error.message);
+    return { success: false, error: 'Could not save request. Please try again.' };
+  }
+
+  return { success: true };
+}

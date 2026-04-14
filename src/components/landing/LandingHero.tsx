@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import ScrollReveal from './ScrollReveal';
 import MockupInteractive from './MockupInteractive';
+import DemoTrigger from './DemoTrigger';
 
 const FLOW_STEPS = [
   { Icon: Smartphone, title: 'Search patient by phone' },
@@ -104,9 +105,9 @@ export default function LandingHero() {
                 marginBottom: '2rem',
               }}
             >
-              <Link href="/onboard" className="lp-btn lp-btn--primary">
-                Start Free Trial
-              </Link>
+              <DemoTrigger>
+                <button className="lp-btn lp-btn--primary">Start Free Trial</button>
+              </DemoTrigger>
               <Link href="#workflow" className="lp-btn lp-btn--secondary">
                 <span style={{ color: '#94a3b8', fontSize: '0.85rem' }}>▶</span>
                 See Workflow
@@ -432,8 +433,12 @@ export default function LandingHero() {
             See it in action in 2 minutes
           </h2>
           <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '1rem' }}>
-            <Link href="/onboard" className="lp-btn lp-btn--primary lp-btn--lg">Book Demo</Link>
-            <Link href="/onboard" className="lp-btn lp-btn--secondary lp-btn--lg">Start Free Trial</Link>
+            <DemoTrigger>
+              <button className="lp-btn lp-btn--primary lp-btn--lg">Book Demo</button>
+            </DemoTrigger>
+            <DemoTrigger>
+              <button className="lp-btn lp-btn--secondary lp-btn--lg">Start Free Trial</button>
+            </DemoTrigger>
           </div>
         </ScrollReveal>
       </section>
@@ -462,9 +467,11 @@ export default function LandingHero() {
 
       {/* Sticky mobile CTA */}
       <div className="lp-mobile-sticky">
-        <Link href="/onboard" className="lp-btn lp-btn--primary" style={{ width: '100%', maxWidth: '28rem', textAlign: 'center' }}>
-          Start Free Trial
-        </Link>
+        <DemoTrigger>
+          <button className="lp-btn lp-btn--primary" style={{ width: '100%', maxWidth: '28rem' }}>
+            Start Free Trial
+          </button>
+        </DemoTrigger>
       </div>
     </>
   );

@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { headers } from 'next/headers';
 import BrandMark from '@/components/BrandMark';
 import BrandLockup from '@/components/BrandLockup';
+import NavDemoButton from '@/components/landing/NavDemoButton';
 
 export const metadata: Metadata = {
   title: 'Medilite AI | Smart clinic flow for modern care',
@@ -36,14 +37,11 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                   <Link href="/#ai" className="bda-nav-link bda-nav-link--ghost">
                     AI Support
                   </Link>
-                  <Link href="/onboard" className="bda-nav-link bda-nav-link--primary">
-                    Start Free Trial
-                  </Link>
+                  <NavDemoButton />
                 </nav>
                 <div className="bda-mobile-nav">
-                  <Link href="/onboard" className="bda-nav-link bda-nav-link--primary">
-                    Start Free Trial
-                  </Link>
+                  <NavDemoButton />
+
                   <details className="bda-mobile-menu">
                     <summary className="bda-mobile-menu-trigger">Menu</summary>
                     <div className="bda-mobile-menu-panel">

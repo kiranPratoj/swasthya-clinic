@@ -2042,6 +2042,10 @@ label {
   gap: 0.75rem;
 }
 
+.bda-nav--desktop {
+  gap: 1.6rem;
+}
+
 .bda-nav-link {
   font-size: 0.92rem;
   padding: 0.9rem 1.28rem;
@@ -2071,6 +2075,10 @@ label {
 .bda-nav-link--secondary:hover {
   background: #fff;
   color: #2454b6;
+}
+
+.bda-nav-link--primary {
+  margin-left: 0.4rem;
 }
 
 /* ─── Landing page (full redesign) ────────────────────────── */
@@ -2177,3 +2185,19 @@ label {
   box-shadow: 0 1px 4px rgba(0,0,0,0.06); margin-bottom: 1.5rem; color: #334155; transition: color 300ms;
 }
 .lp-ai-card:hover .lp-ai-icon { color: #2563EB; }
+
+/* ── Demo Modal ──────────────────────────────────────────── */
+@keyframes lp-modal-in {
+  from { opacity: 0; transform: translateY(24px) scale(0.98); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* Two-panel: stacked on mobile, side-by-side on desktop */
+.lp-modal-container {
+  flex-direction: column !important;
+}
+@media (min-width: 640px) {
+  .lp-modal-container { flex-direction: row !important; }
+  .lp-modal-left  { width: 42%; flex-shrink: 0; }
+  .lp-modal-right { flex: 1; }
+}
