@@ -40,8 +40,6 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                   <NavDemoButton />
                 </nav>
                 <div className="bda-mobile-nav">
-                  <NavDemoButton />
-
                   <details className="bda-mobile-menu">
                     <summary className="bda-mobile-menu-trigger">Menu</summary>
                     <div className="bda-mobile-menu-panel">

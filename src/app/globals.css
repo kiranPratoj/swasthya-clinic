@@ -2100,6 +2100,10 @@ label {
 }
 
 /* Sticky mobile CTA */
+.lp-mobile-sticky {
+  display: none;
+}
+
 @media (max-width: 767px) {
   .lp-mobile-sticky { display: flex !important; }
 }

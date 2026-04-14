@@ -10,6 +10,8 @@ const PUBLIC_PREFIXES = [
   '/api',
   '/_next',
   '/favicon',
+  '/icon',
+  '/apple-icon',
   '/file.svg',
   '/globe.svg',
 ];
