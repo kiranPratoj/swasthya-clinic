@@ -142,7 +142,7 @@ export default function OnboardForm() {
         </h2>
         <p style={{ color: 'var(--color-text-muted)', marginBottom: '1.5rem' }}>
           Your clinic is live at:<br />
-          <strong style={{ color: 'var(--color-primary)', fontSize: '1.1rem' }}>{slug}.sarvam.clinic</strong>
+          <strong style={{ color: 'var(--color-primary)', fontSize: '1.1rem' }}>{slug}.medilite-ai.com</strong>
         </p>
         
         <div style={{ 
@@ -255,7 +255,7 @@ export default function OnboardForm() {
             </div>
             {slugStatusMsg && <p style={{ fontSize: '0.75rem', color: 'var(--color-error)', marginTop: '0.25rem' }}>{slugStatusMsg}</p>}
             <p style={{ fontSize: '0.75rem', marginTop: '0.4rem', color: 'var(--color-text-muted)' }}>
-              URL: <span style={{ color: 'var(--color-primary)', fontWeight: '600' }}>{slug || 'your-clinic'}.sarvam.clinic</span>
+              URL: <span style={{ color: 'var(--color-primary)', fontWeight: '600' }}>{slug || 'your-clinic'}.medilite-ai.com</span>
             </p>
           </div>
 
@@ -385,7 +385,7 @@ export default function OnboardForm() {
               <div>
                 <span style={{ color: 'var(--color-text-muted)', display: 'block', fontSize: '0.75rem', fontWeight: '700' }}>CLINIC</span>
                 <strong>{clinicName}</strong> ({speciality})<br />
-                {slug}.sarvam.clinic
+                {slug}.medilite-ai.com
               </div>
               <div>
                 <span style={{ color: 'var(--color-text-muted)', display: 'block', fontSize: '0.75rem', fontWeight: '700' }}>DOCTOR</span>

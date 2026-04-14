@@ -2,6 +2,7 @@ import { headers } from 'next/headers';
 import { getClinicDb } from '@/lib/db';
 import PatientIntakeForm from './PatientIntakeForm';
 import { verifyRole } from '@/lib/auth';
+import ClinicFallbackPage from '@/components/ClinicFallbackPage';
 
 export default async function IntakePage({
   params,
@@ -14,26 +15,10 @@ export default async function IntakePage({
 
   if (!clinicId) {
     return (
-      <main style={{ padding: '2rem 1rem 4rem' }}>
-        <div
-          className="max-w-xl"
-          style={{
-            background: 'white',
-            border: '1px solid var(--color-border)',
-            borderRadius: 'var(--radius-xl)',
-            boxShadow: 'var(--shadow-sm)',
-            padding: '2rem',
-            textAlign: 'center',
-          }}
-        >
-          <h1 style={{ fontSize: '1.5rem', fontWeight: 700, marginBottom: '0.75rem' }}>
-            Clinic not found
-          </h1>
-          <p style={{ color: 'var(--color-text-muted)' }}>
-            This clinic context could not be resolved for the intake form.
-          </p>
-        </div>
-      </main>
+      <ClinicFallbackPage
+        title="Clinic not found"
+        message="This clinic context could not be resolved for the intake form."
+      />
     );
   }
 

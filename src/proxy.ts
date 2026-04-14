@@ -6,6 +6,7 @@ import { verifySession, COOKIE_NAME } from '@/lib/session';
 const PUBLIC_PREFIXES = [
   '/onboard',
   '/login',
+  '/clinic-not-found',
   '/api',
   '/_next',
   '/favicon',
@@ -73,7 +74,10 @@ export async function proxy(request: NextRequest) {
   }
 
   if (!clinicId) {
-    return new NextResponse('Clinic not found', { status: 404 });
+    const missingClinicUrl = new URL('/clinic-not-found', request.nextUrl);
+    missingClinicUrl.searchParams.set('slug', slug);
+    missingClinicUrl.searchParams.set('path', pathname);
+    return NextResponse.redirect(missingClinicUrl, 307);
   }
 
   // ── Auth check for protected clinic routes ────────────────────────────────

@@ -3,6 +3,7 @@ import { getClinicQueue, callNextPatient } from '@/app/actions';
 import QueueDisplay from './QueueDisplay';
 import QueueAutoRefresh from './QueueAutoRefresh';
 import { verifyRole } from '@/lib/auth';
+import ClinicFallbackPage from '@/components/ClinicFallbackPage';
 
 function getTodayIsoDate(): string {
   const now = new Date();
@@ -18,26 +19,10 @@ export default async function QueuePage({ params }: { params: Promise<{ slug: st
 
   if (!clinicId) {
     return (
-      <main style={{ padding: '2rem 1rem 4rem' }}>
-        <div
-          className="max-w-xl"
-          style={{
-            background: 'white',
-            border: '1px solid var(--color-border)',
-            borderRadius: 'var(--radius-xl)',
-            boxShadow: 'var(--shadow-sm)',
-            padding: '2rem',
-            textAlign: 'center',
-          }}
-        >
-          <h1 style={{ fontSize: '1.5rem', fontWeight: 700, marginBottom: '0.75rem' }}>
-            Clinic not found
-          </h1>
-          <p style={{ color: 'var(--color-text-muted)' }}>
-            The queue view needs a resolved clinic context before it can load today&apos;s appointments.
-          </p>
-        </div>
-      </main>
+      <ClinicFallbackPage
+        title="Clinic not found"
+        message="The queue view needs a resolved clinic context before it can load today's appointments."
+      />
     );
   }
 

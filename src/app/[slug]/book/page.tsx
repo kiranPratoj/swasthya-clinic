@@ -1,6 +1,7 @@
 import { headers } from 'next/headers';
 import { getClinicDb, getDb } from '@/lib/db';
 import BookingForm from './BookingForm';
+import ClinicFallbackPage from '@/components/ClinicFallbackPage';
 
 export default async function PatientBookingPage({
   params,
@@ -12,13 +13,10 @@ export default async function PatientBookingPage({
 
   if (!clinicId) {
     return (
-      <main style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', background: 'var(--color-bg)', padding: '2rem' }}>
-        <div style={{ textAlign: 'center', maxWidth: '400px' }}>
-          <p style={{ fontSize: '3rem', marginBottom: '1rem' }}>🏥</p>
-          <h1 style={{ fontSize: '1.5rem', fontWeight: 800, marginBottom: '0.5rem' }}>Clinic not found</h1>
-          <p style={{ color: 'var(--color-text-muted)' }}>This booking link is not valid. Please contact the clinic directly.</p>
-        </div>
-      </main>
+      <ClinicFallbackPage
+        title="Clinic not found"
+        message="This booking link is not valid. Please contact the clinic directly."
+      />
     );
   }
 
