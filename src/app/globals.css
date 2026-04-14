@@ -2028,3 +2028,152 @@ label {
     display: none !important;
   }
 }
+
+/* ─── Landing Hero Clone Overrides ───────────────────────────── */
+.bda-header-shell {
+  padding: 0.62rem 0;
+}
+
+.bda-header-main {
+  gap: 1.1rem;
+}
+
+.bda-brand {
+  gap: 0.75rem;
+}
+
+.bda-nav-link {
+  font-size: 0.92rem;
+  padding: 0.9rem 1.28rem;
+  border-radius: 1rem;
+}
+
+.bda-nav-link--ghost {
+  background: transparent;
+  border-color: transparent;
+  color: #6a7891;
+  padding-inline: 0.1rem;
+  box-shadow: none;
+}
+
+.bda-nav-link--ghost:hover {
+  background: transparent;
+  color: #1f2d48;
+  box-shadow: none;
+}
+
+.bda-nav-link--secondary {
+  background: #fff;
+  color: #2454b6;
+  border: 1px solid #dce4f2;
+}
+
+.bda-nav-link--secondary:hover {
+  background: #fff;
+  color: #2454b6;
+}
+
+/* ─── Landing page (full redesign) ────────────────────────── */
+@keyframes lp-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%       { opacity: 0.5; transform: scale(0.85); }
+}
+
+/* Flow line: visible only on md+ */
+@media (min-width: 768px) {
+  .lp-flow-line { display: block !important; }
+}
+
+/* Mockup grid: single col on mobile */
+@media (max-width: 640px) {
+  .lp-mockup-grid {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+/* Sticky mobile CTA */
+@media (max-width: 767px) {
+  .lp-mobile-sticky { display: flex !important; }
+}
+
+/* Hide layout header on landing page — it's transparent already, no change needed */
+/* Hide layout footer on landing (it is hidden by isClinicScopedPage logic already) */
+
+/* ── Buttons ─────────────────────────────────────────────── */
+.lp-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.95rem 2.5rem;
+  border-radius: 999px;
+  font-weight: 700;
+  font-size: 1.05rem;
+  text-decoration: none;
+  transition: transform 200ms, box-shadow 200ms, background 200ms;
+  cursor: pointer;
+  border: none;
+  font-family: inherit;
+  justify-content: center;
+}
+.lp-btn--lg { padding: 1rem 3rem; font-size: 1.1rem; }
+.lp-btn--primary {
+  background: #2563EB;
+  color: #fff;
+  box-shadow: 0 10px 40px -10px rgba(37,99,235,0.6);
+}
+.lp-btn--primary:hover { transform: translateY(-2px); background: #1d4ed8; }
+.lp-btn--secondary {
+  background: #fff;
+  color: #334155;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+}
+.lp-btn--secondary:hover { transform: translateY(-2px); background: #f8fafc; }
+
+/* ── Feature cards ───────────────────────────────────────── */
+.lp-feature-card {
+  padding: 2.5rem;
+  border-radius: 2rem;
+  background: #f8fafc;
+  border: 1px solid #f1f5f9;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  transition: box-shadow 300ms, background 300ms;
+}
+.lp-feature-card:hover { background: #fff; box-shadow: 0 20px 60px rgba(100,116,139,0.15); }
+.lp-feature-icon {
+  width: 72px; height: 72px;
+  background: #fff; border-radius: 1rem;
+  border: 1px solid #f1f5f9;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+  display: flex; align-items: center; justify-content: center;
+  margin-bottom: 1.75rem; color: #2563EB;
+  transition: transform 300ms;
+}
+.lp-feature-card:hover .lp-feature-icon { transform: scale(1.1); }
+.lp-feature-title { font-size: 1.2rem; font-weight: 800; color: #0F172A; margin-bottom: 0.75rem; letter-spacing: -0.02em; }
+.lp-feature-body { color: #64748B; font-size: 1rem; font-weight: 500; line-height: 1.6; }
+
+/* ── Flow steps ──────────────────────────────────────────── */
+.lp-flow-step { display: flex; flex-direction: column; align-items: center; gap: 1rem; width: clamp(8rem, 12vw, 11rem); }
+.lp-step-icon {
+  width: 80px; height: 80px;
+  background: #fff; border-radius: 1.5rem;
+  border: 2px solid #e2e8f0;
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.06); color: #94a3b8;
+  transition: border-color 300ms, background 300ms, color 300ms, transform 300ms;
+}
+.lp-flow-step:hover .lp-step-icon { border-color: #2563EB; background: #eff6ff; color: #2563EB; transform: scale(1.05); }
+
+/* ── AI tool cards ───────────────────────────────────────── */
+.lp-ai-card { background: #fff; border: 1px solid #f1f5f9; padding: 2rem; border-radius: 1.75rem; height: 100%; transition: box-shadow 400ms, background 400ms; }
+.lp-ai-card:hover { box-shadow: 0 20px 60px rgba(100,116,139,0.15); background: #fafafa; }
+.lp-ai-icon {
+  width: 56px; height: 56px; background: #fff; border: 1px solid #f1f5f9;
+  border-radius: 0.875rem; display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.06); margin-bottom: 1.5rem; color: #334155; transition: color 300ms;
+}
+.lp-ai-card:hover .lp-ai-icon { color: #2563EB; }

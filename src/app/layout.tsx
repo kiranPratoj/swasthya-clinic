@@ -6,8 +6,8 @@ import BrandMark from '@/components/BrandMark';
 import BrandLockup from '@/components/BrandLockup';
 
 export const metadata: Metadata = {
-  title: 'medilite.ai | Smart clinic flow for modern care',
-  description: 'medilite.ai is a voice-first clinic flow and continuity platform for Indian clinics, powered by Sarvam AI.',
+  title: 'Medilite AI | Smart clinic flow for modern care',
+  description: 'Medilite AI is a voice-first clinic flow and continuity platform for Indian clinics, powered by Sarvam AI.',
 };
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
@@ -22,64 +22,42 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             <div className="bda-header-main">
               <Link href="/" className="bda-brand">
                 <BrandLockup markSize={50} titleSize="sm" className="bda-brand-lockup" />
-                <div className="bda-prism-badge">VOICE-FIRST</div>
               </Link>
 
               {!isClinicScopedPage && (
                 <>
                 <nav className="bda-nav bda-nav--desktop">
-                  <Link href="/#product" className="bda-nav-link bda-nav-link--ghost">
-                    Product
+                  <Link href="/#problem" className="bda-nav-link bda-nav-link--ghost">
+                    The Problem
                   </Link>
                   <Link href="/#workflow" className="bda-nav-link bda-nav-link--ghost">
-                    Workflow
+                    How it Works
                   </Link>
-                  <Link href="/#benefits" className="bda-nav-link bda-nav-link--ghost">
-                    Benefits
-                  </Link>
-                  <Link href="/#sarvam" className="bda-nav-link bda-nav-link--ghost">
-                    Why Sarvam AI
-                  </Link>
-                  <Link href="/#clinics" className="bda-nav-link bda-nav-link--ghost">
-                    Clinics
-                  </Link>
-                  <Link href="/#contact" className="bda-nav-link bda-nav-link--ghost">
-                    Contact
-                  </Link>
-                  <Link href="/#workflow" className="bda-nav-link">
-                    See Workflow
+                  <Link href="/#ai" className="bda-nav-link bda-nav-link--ghost">
+                    AI Support
                   </Link>
                   <Link href="/onboard" className="bda-nav-link bda-nav-link--primary">
-                    Book Demo
+                    Start Free Trial
                   </Link>
                 </nav>
                 <div className="bda-mobile-nav">
                   <Link href="/onboard" className="bda-nav-link bda-nav-link--primary">
-                    Book Demo
+                    Start Free Trial
                   </Link>
                   <details className="bda-mobile-menu">
                     <summary className="bda-mobile-menu-trigger">Menu</summary>
                     <div className="bda-mobile-menu-panel">
-                      <Link href="/#product" className="bda-mobile-menu-link">
-                        Product
+                      <Link href="/#problem" className="bda-mobile-menu-link">
+                        The Problem
                       </Link>
                       <Link href="/#workflow" className="bda-mobile-menu-link">
-                        Workflow
+                        How it Works
                       </Link>
-                      <Link href="/#benefits" className="bda-mobile-menu-link">
-                        Benefits
+                      <Link href="/#ai" className="bda-mobile-menu-link">
+                        AI Support
                       </Link>
-                      <Link href="/#sarvam" className="bda-mobile-menu-link">
-                        Why Sarvam AI
-                      </Link>
-                      <Link href="/#clinics" className="bda-mobile-menu-link">
-                        Clinics
-                      </Link>
-                      <Link href="/#contact" className="bda-mobile-menu-link">
-                        Contact
-                      </Link>
-                      <Link href="/login" className="bda-mobile-menu-link">
-                        Staff Login
+                      <Link href="/#workflow" className="bda-mobile-menu-link">
+                        See Workflow
                       </Link>
                     </div>
                   </details>
@@ -94,7 +72,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           {children}
         </main>
 
-        <footer className="bda-footer">
+        {isClinicScopedPage && <footer className="bda-footer">
           <div className="max-w-7xl px-4">
             <div className="bda-footer-copy">
               <div style={{ display: 'grid', gap: '1.2rem' }}>
@@ -140,7 +118,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
               </div>
             </div>
           </div>
-        </footer>
+        </footer>}
       </body>
     </html>
   );
