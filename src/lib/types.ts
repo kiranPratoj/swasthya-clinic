@@ -85,6 +85,7 @@ export type Appointment = {
   payment_utr: string | null;
   payment_amount: number | null;
   payment_status: 'pending' | 'verified' | 'failed';
+  bill_summary?: BillSummary | null;
 };
 
 export type VisitHistory = {
@@ -104,6 +105,78 @@ export type AuditLog = {
   target_id: string | null;
   meta: Record<string, unknown> | null;
   created_at: string;
+};
+
+// ─── Billing ──────────────────────────────────────────────────────────────────
+
+export type BillStatus = 'draft' | 'open' | 'partially_paid' | 'paid' | 'void';
+
+export type BillLineItemType =
+  | 'consultation'
+  | 'procedure'
+  | 'consumable'
+  | 'service'
+  | 'adjustment';
+
+export type PaymentEventStatus = 'recorded' | 'failed' | 'reversed';
+
+export type Bill = {
+  id: string;
+  clinic_id: string;
+  appointment_id: string;
+  patient_id: string;
+  status: BillStatus;
+  subtotal_amount: number;
+  discount_amount: number;
+  total_amount: number;
+  amount_paid: number;
+  amount_due: number;
+  notes: string | null;
+  created_by_role: UserRole | null;
+  created_at: string;
+  updated_at: string;
+  closed_at: string | null;
+};
+
+export type BillLineItem = {
+  id: string;
+  clinic_id: string;
+  bill_id: string;
+  appointment_id: string;
+  item_type: BillLineItemType;
+  label: string;
+  quantity: number;
+  unit_amount: number;
+  line_total: number;
+  metadata: Record<string, unknown> | null;
+  created_by_role: UserRole | null;
+  created_at: string;
+};
+
+export type PaymentEvent = {
+  id: string;
+  clinic_id: string;
+  bill_id: string;
+  appointment_id: string;
+  patient_id: string;
+  amount: number;
+  payment_mode: 'cash' | 'upi';
+  payment_status: PaymentEventStatus;
+  utr_number: string | null;
+  collected_by_role: UserRole | null;
+  collected_at: string;
+  notes: string | null;
+  created_at: string;
+};
+
+export type BillSummary = {
+  bill_id: string;
+  status: BillStatus;
+  total_amount: number;
+  amount_paid: number;
+  amount_due: number;
+  payment_display_mode: 'cash' | 'upi' | 'mixed' | null;
+  payment_count: number;
 };
 
 // ─── Communication ───────────────────────────────────────────────────────────
@@ -223,4 +296,3 @@ export type PatientReport = {
   created_at: string;
   signedUrl: string; // populated at read time — not stored in DB
 };
-

@@ -267,9 +267,11 @@ export default function ConsultForm({ appointment, slug, clinicName, reports }: 
           <div style={{ marginBottom: '1rem' }}>
             <p>
               <strong>Payment:</strong>{' '}
-              {appointment.payment_status === 'verified'
-                ? `Paid${appointment.payment_mode ? ` · ${appointment.payment_mode.toUpperCase()}` : ''}`
-                : 'Pending'}
+              {appointment.bill_summary && appointment.bill_summary.total_amount > 0
+                ? `Total ₹${appointment.bill_summary.total_amount.toFixed(2)} · Paid ₹${appointment.bill_summary.amount_paid.toFixed(2)} · Due ₹${appointment.bill_summary.amount_due.toFixed(2)}`
+                : appointment.payment_status === 'verified'
+                  ? `Paid${appointment.payment_mode ? ` · ${appointment.payment_mode.toUpperCase()}` : ''}`
+                  : 'Pending'}
             </p>
           </div>
 

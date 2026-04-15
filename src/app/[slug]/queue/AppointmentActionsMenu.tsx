@@ -2,25 +2,23 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { cancelAppointment, markNoShow, rescheduleAppointment, updateAppointmentPayment } from '@/app/actions';
-import type { AppointmentStatus, UserRole } from '@/lib/types';
+import { addAppointmentCharge, cancelAppointment, markNoShow, recordAppointmentPayment, rescheduleAppointment } from '@/app/actions';
+import type { AppointmentStatus, BillSummary, UserRole } from '@/lib/types';
 
 type Props = {
   appointmentId: string;
   currentStatus: AppointmentStatus;
-  paymentMode: 'cash' | 'upi' | null | undefined;
-  paymentStatus: 'pending' | 'verified' | 'failed';
+  billSummary?: BillSummary | null;
   patientName: string;
   role: UserRole;
 };
 
-type Mode = 'idle' | 'cancel' | 'reschedule' | 'payment';
+type Mode = 'idle' | 'cancel' | 'reschedule' | 'billing';
 
 export default function AppointmentActionsMenu({
   appointmentId,
   currentStatus,
-  paymentMode,
-  paymentStatus,
+  billSummary,
   patientName,
   role,
 }: Props) {
@@ -30,10 +28,11 @@ export default function AppointmentActionsMenu({
   const [mode, setMode] = useState<Mode>('idle');
   const [reason, setReason] = useState('');
   const [newDate, setNewDate] = useState('');
-  const [nextPaymentMode, setNextPaymentMode] = useState<'cash' | 'upi'>(paymentMode ?? 'cash');
-  const [nextPaymentState, setNextPaymentState] = useState<'pending' | 'paid'>(
-    paymentStatus === 'verified' ? 'paid' : 'pending'
-  );
+  const [chargeLabel, setChargeLabel] = useState('');
+  const [chargeAmount, setChargeAmount] = useState('');
+  const [paymentAmount, setPaymentAmount] = useState('');
+  const [nextPaymentMode, setNextPaymentMode] = useState<'cash' | 'upi'>('cash');
+  const [paymentUtr, setPaymentUtr] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const canManagePayment = role === 'receptionist' || role === 'admin';
@@ -63,8 +62,11 @@ export default function AppointmentActionsMenu({
       setMode('idle');
       setReason('');
       setNewDate('');
-      setNextPaymentMode(paymentMode ?? 'cash');
-      setNextPaymentState(paymentStatus === 'verified' ? 'paid' : 'pending');
+      setChargeLabel('');
+      setChargeAmount('');
+      setPaymentAmount('');
+      setNextPaymentMode('cash');
+      setPaymentUtr('');
       router.refresh();
     } catch (actionError: unknown) {
       setError(
@@ -138,9 +140,14 @@ export default function AppointmentActionsMenu({
                   type="button"
                   disabled={isLoading}
                   onClick={() => {
-                    setNextPaymentMode(paymentMode ?? 'cash');
-                    setNextPaymentState(paymentStatus === 'verified' ? 'paid' : 'pending');
-                    setMode('payment');
+                    setPaymentAmount(
+                      billSummary?.amount_due && billSummary.amount_due > 0
+                        ? String(billSummary.amount_due)
+                        : ''
+                    );
+                    setNextPaymentMode('cash');
+                    setPaymentUtr('');
+                    setMode('billing');
                   }}
                   style={{
                     width: '100%', textAlign: 'left', padding: '0.65rem 0.875rem',
@@ -150,7 +157,7 @@ export default function AppointmentActionsMenu({
                     opacity: isLoading ? 0.6 : 1,
                   }}
                 >
-                  Update payment
+                  Manage billing
                 </button>
               )}
               {currentStatus !== 'completed' && [
@@ -176,13 +183,79 @@ export default function AppointmentActionsMenu({
             </>
           )}
 
-          {mode === 'payment' && (
+          {mode === 'billing' && (
             <>
               <p style={{ fontSize: '0.825rem', fontWeight: 700, color: 'var(--color-text-muted)' }}>
-                Update payment for {patientName}
+                Billing for {patientName}
               </p>
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
+                  gap: '0.45rem',
+                }}
+              >
+                {[
+                  { label: 'Total', value: billSummary ? `₹${billSummary.total_amount.toFixed(2)}` : '₹0.00' },
+                  { label: 'Paid', value: billSummary ? `₹${billSummary.amount_paid.toFixed(2)}` : '₹0.00' },
+                  { label: 'Due', value: billSummary ? `₹${billSummary.amount_due.toFixed(2)}` : '₹0.00' },
+                ].map((item) => (
+                  <div
+                    key={item.label}
+                    style={{
+                      padding: '0.55rem',
+                      borderRadius: 'var(--radius-md)',
+                      background: 'var(--color-bg)',
+                      border: '1px solid var(--color-border)',
+                    }}
+                  >
+                    <div style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                      {item.label}
+                    </div>
+                    <div style={{ fontSize: '0.9rem', fontWeight: 800, color: 'var(--color-text)' }}>{item.value}</div>
+                  </div>
+                ))}
+              </div>
+              <div style={{ display: 'grid', gap: '0.45rem', paddingTop: '0.2rem' }}>
+                <span style={{ fontSize: '0.76rem', fontWeight: 700, color: 'var(--color-text-muted)' }}>Add charge</span>
+                <input
+                  type="text"
+                  value={chargeLabel}
+                  disabled={isLoading}
+                  onChange={(event) => setChargeLabel(event.target.value)}
+                  placeholder="Charge label"
+                />
+                <input
+                  type="text"
+                  value={chargeAmount}
+                  disabled={isLoading}
+                  onChange={(event) => setChargeAmount(event.target.value)}
+                  placeholder="Amount"
+                  inputMode="decimal"
+                />
+                <button
+                  type="button"
+                  disabled={isLoading}
+                  onClick={() =>
+                    void runAction(async () => {
+                      await addAppointmentCharge(appointmentId, chargeLabel, chargeAmount);
+                    })
+                  }
+                  style={{ ...actionBtn, background: 'var(--color-primary)' }}
+                >
+                  {isLoading ? 'Saving...' : 'Add charge'}
+                </button>
+              </div>
               <div style={{ display: 'grid', gap: '0.45rem' }}>
-                <span style={{ fontSize: '0.76rem', fontWeight: 700, color: 'var(--color-text-muted)' }}>Mode</span>
+                <span style={{ fontSize: '0.76rem', fontWeight: 700, color: 'var(--color-text-muted)' }}>Record payment</span>
+                <input
+                  type="text"
+                  value={paymentAmount}
+                  disabled={isLoading}
+                  onChange={(event) => setPaymentAmount(event.target.value)}
+                  placeholder="Payment amount"
+                  inputMode="decimal"
+                />
                 <div style={{ display: 'flex', gap: '0.5rem' }}>
                   {(['cash', 'upi'] as const).map((modeOption) => (
                     <button
@@ -203,28 +276,15 @@ export default function AppointmentActionsMenu({
                   ))}
                 </div>
               </div>
-              <div style={{ display: 'grid', gap: '0.45rem' }}>
-                <span style={{ fontSize: '0.76rem', fontWeight: 700, color: 'var(--color-text-muted)' }}>Status</span>
-                <div style={{ display: 'flex', gap: '0.5rem' }}>
-                  {(['pending', 'paid'] as const).map((stateOption) => (
-                    <button
-                      key={stateOption}
-                      type="button"
-                      disabled={isLoading}
-                      onClick={() => setNextPaymentState(stateOption)}
-                      style={{
-                        ...ghostBtn,
-                        flex: 1,
-                        border: nextPaymentState === stateOption ? '2px solid var(--color-primary)' : '1px solid var(--color-border)',
-                        color: nextPaymentState === stateOption ? 'var(--color-primary)' : 'var(--color-text)',
-                        background: nextPaymentState === stateOption ? 'var(--color-primary-soft)' : 'white',
-                      }}
-                    >
-                      {stateOption === 'paid' ? 'Paid' : 'Pending'}
-                    </button>
-                  ))}
-                </div>
-              </div>
+              {nextPaymentMode === 'upi' && (
+                <input
+                  type="text"
+                  value={paymentUtr}
+                  disabled={isLoading}
+                  onChange={(event) => setPaymentUtr(event.target.value)}
+                  placeholder="UTR number"
+                />
+              )}
               <div style={{ display: 'flex', gap: '0.5rem' }}>
                 <button type="button" disabled={isLoading} onClick={() => setMode('idle')} style={ghostBtn}>
                   Back
@@ -234,12 +294,17 @@ export default function AppointmentActionsMenu({
                   disabled={isLoading}
                   onClick={() =>
                     void runAction(async () => {
-                      await updateAppointmentPayment(appointmentId, nextPaymentMode, nextPaymentState);
+                      await recordAppointmentPayment(
+                        appointmentId,
+                        paymentAmount,
+                        nextPaymentMode,
+                        paymentUtr
+                      );
                     })
                   }
                   style={{ ...actionBtn, background: 'var(--color-primary)' }}
                 >
-                  {isLoading ? 'Saving...' : 'Save payment'}
+                  {isLoading ? 'Saving...' : 'Record payment'}
                 </button>
               </div>
             </>

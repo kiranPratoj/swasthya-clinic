@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation';
 import { getPatientProfile, getPatientReports } from '@/app/actions';
 import type { Appointment, VisitHistory } from '@/lib/types';
 import PatientEditForm from '../PatientEditForm';
+import SendPortalLinkButton from '../SendPortalLinkButton';
 import { verifyRole } from '@/lib/auth';
 import ReportCard from '@/components/reports/ReportCard';
 import ReportUploadForm from '@/components/reports/ReportUploadForm';
@@ -310,11 +311,14 @@ export default async function PatientProfilePage({
               {profile.patient.age ? `Age ${profile.patient.age}` : 'Age not recorded'} · {totalVisits} total visit{totalVisits === 1 ? '' : 's'}
             </p>
           </div>
-          <PatientEditForm
-            patientId={profile.patient.id}
-            initialName={profile.patient.name}
-            initialPhone={profile.patient.phone ?? ''}
-          />
+          <div style={{ display: 'grid', gap: '0.75rem', justifyItems: 'end' }}>
+            <PatientEditForm
+              patientId={profile.patient.id}
+              initialName={profile.patient.name}
+              initialPhone={profile.patient.phone ?? ''}
+            />
+            {profile.patient.phone && <SendPortalLinkButton patientId={profile.patient.id} />}
+          </div>
         </div>
       </section>
 

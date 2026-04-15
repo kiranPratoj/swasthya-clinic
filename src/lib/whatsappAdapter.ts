@@ -11,12 +11,20 @@ type AppointmentMessageParams = {
   clinicName: string;
   date: string;
   tokenNumber: number;
+  portalUrl?: string;
 };
 
 type CancellationMessageParams = {
   toPhone: string;
   patientName: string;
   clinicName: string;
+};
+
+type PortalLinkMessageParams = {
+  toPhone: string;
+  patientName: string;
+  clinicName: string;
+  portalUrl: string;
 };
 
 type WhatsAppConfig = {
@@ -125,6 +133,9 @@ export async function sendAppointmentConfirmation(
     `Token Number: ${params.tokenNumber}`,
     '',
     'Please keep this token ready when you arrive.',
+    ...(params.portalUrl
+      ? ['', 'View your health records anytime:', params.portalUrl, '', 'This link is valid for 24 hours.']
+      : []),
   ].join('\n');
 
   return sendTextMessage(params.toPhone, message);
@@ -157,6 +168,22 @@ export async function sendCancellationNotice(
     'This visit has been marked as cancelled.',
     '',
     'Please contact the clinic if you need to reschedule.',
+  ].join('\n');
+
+  return sendTextMessage(params.toPhone, message);
+}
+
+export async function sendPortalLink(
+  params: PortalLinkMessageParams
+): Promise<SendResult> {
+  const message = [
+    `Hello ${params.patientName},`,
+    '',
+    `Here is your secure patient portal link for ${params.clinicName}:`,
+    params.portalUrl,
+    '',
+    'This link is valid for 24 hours.',
+    'If it expires, ask the clinic to send a new one.',
   ].join('\n');
 
   return sendTextMessage(params.toPhone, message);

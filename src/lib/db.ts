@@ -4,14 +4,20 @@ declare global {
   var __SWASTHYA_CLIENT: SupabaseClient | undefined;
 }
 
+// Keep bearer-token tables such as patient_access_tokens out of this list.
+// Those flows use the raw service client so token validation/revocation is not
+// coupled to header-injected clinic scoping.
 const CLINIC_SCOPED_TABLES = new Set([
   'appointments',
   'audit_log',
+  'bill_line_items',
+  'bills',
   'clinic_users',
   'communication_events',
   'doctors',
   'patient_reports',
   'patients',
+  'payment_events',
   'staff',
   'visit_history',
 ]);

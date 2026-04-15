@@ -4,16 +4,23 @@ import { headers } from 'next/headers';
 import { revalidatePath } from 'next/cache';
 import { getDb, getClinicDb, auditLog } from '@/lib/db';
 import { requireSession } from '@/lib/auth';
+import { computeBillSnapshot, toMoneyNumber } from '@/lib/billing';
+import { createPatientToken } from '@/lib/patientToken';
 import type {
   Appointment,
   AppointmentStatus,
+  Bill,
+  BillLineItem,
+  BillSummary,
   CommunicationEvent,
   Doctor,
   OnboardingInput,
   Patient,
   PatientReport,
+  PaymentEvent,
   PatientWithHistory,
   QueueItem,
+  UserRole,
   VisitHistory,
 } from '@/lib/types';
 
@@ -31,6 +38,49 @@ async function getClinicSlug(clinicId: string): Promise<string> {
   return clinic?.slug ?? '';
 }
 
+async function getClinicIdentity(clinicId: string): Promise<{ slug: string; custom_domain: string | null; name: string }> {
+  const { data, error } = await getDb()
+    .from('clinics')
+    .select('slug, custom_domain, name')
+    .eq('id', clinicId)
+    .single();
+
+  if (error || !data) {
+    throw new Error(error?.message ?? 'Clinic not found.');
+  }
+
+  return {
+    slug: data.slug as string,
+    custom_domain: (data.custom_domain as string | null) ?? null,
+    name: data.name as string,
+  };
+}
+
+function normalizeBaseUrl(value: string): string {
+  return value.replace(/\/+$/, '');
+}
+
+function buildPatientPortalUrl(input: {
+  slug: string;
+  token: string;
+  customDomain?: string | null;
+}): string {
+  const encodedToken = encodeURIComponent(input.token);
+  if (input.customDomain?.trim()) {
+    const customBase = input.customDomain.startsWith('http')
+      ? normalizeBaseUrl(input.customDomain)
+      : `https://${normalizeBaseUrl(input.customDomain)}`;
+    return `${customBase}/${input.slug}/portal/${encodedToken}`;
+  }
+
+  const appUrl = process.env.APP_URL?.trim();
+  if (!appUrl) {
+    return '';
+  }
+
+  return `${normalizeBaseUrl(appUrl)}/${input.slug}/portal/${encodedToken}`;
+}
+
 async function getTenantDb(): Promise<{ clinicId: string; db: ReturnType<typeof getClinicDb> }> {
   const clinicId = await getClinicId();
   return { clinicId, db: getClinicDb(clinicId) };
@@ -39,6 +89,304 @@ async function getTenantDb(): Promise<{ clinicId: string; db: ReturnType<typeof 
 async function getActorRole(): Promise<'admin' | 'doctor' | 'receptionist'> {
   const session = await requireSession();
   return session.role;
+}
+
+type TenantScopedDb = Awaited<ReturnType<typeof getTenantDb>>['db'];
+
+function toPersistedBillSummary(
+  billId: string,
+  snapshot: ReturnType<typeof computeBillSnapshot>
+): BillSummary {
+  return {
+    bill_id: billId,
+    status: snapshot.status,
+    total_amount: snapshot.total_amount,
+    amount_paid: snapshot.amount_paid,
+    amount_due: snapshot.amount_due,
+    payment_display_mode: snapshot.payment_display_mode,
+    payment_count: snapshot.payment_count,
+  };
+}
+
+function isMissingBillingSchemaError(message: string): boolean {
+  return (
+    message.includes("Could not find the table 'public.bills'") ||
+    message.includes("Could not find the table 'public.bill_line_items'") ||
+    message.includes("Could not find the table 'public.payment_events'") ||
+    message.includes('relation "bills" does not exist') ||
+    message.includes('relation "bill_line_items" does not exist') ||
+    message.includes('relation "payment_events" does not exist')
+  );
+}
+
+async function getLatestUpiUtr(
+  db: TenantScopedDb,
+  clinicId: string,
+  billId: string
+): Promise<string | null> {
+  const { data, error } = await db
+    .from('payment_events')
+    .select('utr_number')
+    .eq('clinic_id', clinicId)
+    .eq('bill_id', billId)
+    .eq('payment_mode', 'upi')
+    .eq('payment_status', 'recorded')
+    .not('utr_number', 'is', null)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return typeof data?.utr_number === 'string' ? data.utr_number : null;
+}
+
+async function syncAppointmentPaymentSnapshot(
+  db: TenantScopedDb,
+  clinicId: string,
+  appointmentId: string,
+  billSummary: BillSummary | null
+): Promise<void> {
+  const paymentMode =
+    billSummary?.payment_display_mode && billSummary.payment_display_mode !== 'mixed'
+      ? billSummary.payment_display_mode
+      : null;
+  const paymentStatus = billSummary?.status === 'paid' ? 'verified' : 'pending';
+  const paymentAmount = billSummary?.total_amount ?? null;
+  const paymentUtr =
+    billSummary?.payment_display_mode === 'upi'
+      ? await getLatestUpiUtr(db, clinicId, billSummary.bill_id)
+      : null;
+
+  const { error } = await db
+    .from('appointments')
+    .update({
+      payment_mode: paymentMode,
+      payment_status: paymentStatus,
+      payment_amount: paymentAmount,
+      payment_utr: paymentUtr,
+    })
+    .eq('id', appointmentId)
+    .eq('clinic_id', clinicId);
+
+  if (
+    error &&
+    !(
+      error.message.includes('payment_mode') ||
+      error.message.includes('payment_status') ||
+      error.message.includes('payment_amount') ||
+      error.message.includes('payment_utr')
+    )
+  ) {
+    throw new Error(error.message);
+  }
+}
+
+async function getOrCreateAppointmentBill(
+  db: TenantScopedDb,
+  clinicId: string,
+  appointmentId: string,
+  actorRole: UserRole
+): Promise<Bill> {
+  const { data: existingBill, error: billError } = await db
+    .from('bills')
+    .select('*')
+    .eq('clinic_id', clinicId)
+    .eq('appointment_id', appointmentId)
+    .maybeSingle();
+
+  if (billError) {
+    throw new Error(billError.message);
+  }
+
+  if (existingBill) {
+    return existingBill as Bill;
+  }
+
+  const { data: appointment, error: appointmentError } = await db
+    .from('appointments')
+    .select('id, patient_id')
+    .eq('clinic_id', clinicId)
+    .eq('id', appointmentId)
+    .single();
+
+  if (appointmentError) {
+    throw new Error(appointmentError.message);
+  }
+
+  const { data: newBill, error: createError } = await db
+    .from('bills')
+    .insert({
+      clinic_id: clinicId,
+      appointment_id: appointment.id,
+      patient_id: appointment.patient_id,
+      status: 'draft',
+      created_by_role: actorRole,
+    })
+    .select('*')
+    .single();
+
+  if (createError) {
+    throw new Error(createError.message);
+  }
+
+  return newBill as Bill;
+}
+
+async function refreshBillSummary(
+  db: TenantScopedDb,
+  clinicId: string,
+  bill: Pick<Bill, 'id' | 'appointment_id' | 'discount_amount'>
+): Promise<BillSummary> {
+  const [{ data: lineItems, error: lineItemError }, { data: payments, error: paymentsError }] =
+    await Promise.all([
+      db
+        .from('bill_line_items')
+        .select('line_total')
+        .eq('clinic_id', clinicId)
+        .eq('bill_id', bill.id),
+      db
+        .from('payment_events')
+        .select('amount, payment_mode, payment_status')
+        .eq('clinic_id', clinicId)
+        .eq('bill_id', bill.id),
+    ]);
+
+  if (lineItemError) {
+    throw new Error(lineItemError.message);
+  }
+  if (paymentsError) {
+    throw new Error(paymentsError.message);
+  }
+
+  const snapshot = computeBillSnapshot(
+    (lineItems ?? []) as Array<Pick<BillLineItem, 'line_total'>>,
+    (payments ?? []) as Array<Pick<PaymentEvent, 'amount' | 'payment_mode' | 'payment_status'>>,
+    bill.discount_amount ?? 0
+  );
+
+  const closedAt = snapshot.status === 'paid' ? new Date().toISOString() : null;
+  const { error: updateError } = await db
+    .from('bills')
+    .update({
+      status: snapshot.status,
+      subtotal_amount: snapshot.subtotal_amount,
+      discount_amount: snapshot.discount_amount,
+      total_amount: snapshot.total_amount,
+      amount_paid: snapshot.amount_paid,
+      amount_due: snapshot.amount_due,
+      updated_at: new Date().toISOString(),
+      closed_at: closedAt,
+    })
+    .eq('id', bill.id)
+    .eq('clinic_id', clinicId);
+
+  if (updateError) {
+    throw new Error(updateError.message);
+  }
+
+  const summary = toPersistedBillSummary(bill.id, snapshot);
+  await syncAppointmentPaymentSnapshot(db, clinicId, bill.appointment_id, summary);
+  return summary;
+}
+
+async function getBillSummaryMap(
+  db: TenantScopedDb,
+  clinicId: string,
+  appointmentIds: string[]
+): Promise<Map<string, BillSummary>> {
+  const uniqueIds = [...new Set(appointmentIds.filter(Boolean))];
+  if (uniqueIds.length === 0) {
+    return new Map();
+  }
+
+  const { data: bills, error: billsError } = await db
+    .from('bills')
+    .select('id, appointment_id, status, total_amount, amount_paid, amount_due')
+    .eq('clinic_id', clinicId)
+    .in('appointment_id', uniqueIds);
+
+  if (billsError && isMissingBillingSchemaError(billsError.message)) {
+    return new Map();
+  }
+  if (billsError) {
+    throw new Error(billsError.message);
+  }
+
+  if (!bills || bills.length === 0) {
+    return new Map();
+  }
+
+  const billIds = bills.map((bill) => bill.id);
+  const { data: payments, error: paymentsError } = await db
+    .from('payment_events')
+    .select('bill_id, payment_mode, payment_status')
+    .eq('clinic_id', clinicId)
+    .in('bill_id', billIds)
+    .eq('payment_status', 'recorded');
+
+  if (paymentsError && isMissingBillingSchemaError(paymentsError.message)) {
+    return new Map();
+  }
+  if (paymentsError) {
+    throw new Error(paymentsError.message);
+  }
+
+  const paymentModeMap = new Map<
+    string,
+    {
+      modes: Set<'cash' | 'upi'>;
+      count: number;
+    }
+  >();
+
+  for (const payment of payments ?? []) {
+    const entry =
+      paymentModeMap.get(payment.bill_id) ??
+      { modes: new Set<'cash' | 'upi'>(), count: 0 };
+    if (payment.payment_mode === 'cash' || payment.payment_mode === 'upi') {
+      entry.modes.add(payment.payment_mode);
+    }
+    entry.count += 1;
+    paymentModeMap.set(payment.bill_id, entry);
+  }
+
+  const summaryMap = new Map<string, BillSummary>();
+  for (const bill of bills) {
+    const paymentMeta = paymentModeMap.get(bill.id);
+    const modes = paymentMeta?.modes ? [...paymentMeta.modes] : [];
+    summaryMap.set(bill.appointment_id, {
+      bill_id: bill.id,
+      status: bill.status,
+      total_amount: Number(bill.total_amount ?? 0),
+      amount_paid: Number(bill.amount_paid ?? 0),
+      amount_due: Number(bill.amount_due ?? 0),
+      payment_display_mode:
+        modes.length === 0 ? null : modes.length === 1 ? modes[0] : 'mixed',
+      payment_count: paymentMeta?.count ?? 0,
+    });
+  }
+
+  return summaryMap;
+}
+
+async function attachBillSummaries<T extends { id: string; bill_summary?: BillSummary | null }>(
+  db: TenantScopedDb,
+  clinicId: string,
+  rows: T[]
+): Promise<T[]> {
+  const summaryMap = await getBillSummaryMap(
+    db,
+    clinicId,
+    rows.map((row) => row.id)
+  );
+
+  return rows.map((row) => ({
+    ...row,
+    bill_summary: summaryMap.get(row.id) ?? null,
+  }));
 }
 
 // ─── Clinic onboarding ────────────────────────────────────────────────────────
@@ -116,6 +464,22 @@ export async function createAppointment(formData: FormData): Promise<{ appointme
     (formData.get('payment_state') as 'pending' | 'paid' | null) ??
     ((formData.get('payment_status') as 'pending' | 'paid' | null) ?? 'pending');
   const payment_status = payment_state === 'paid' ? 'verified' : 'pending';
+  const rawBillingAmount = formData.get('billing_amount');
+  const billingAmount = toMoneyNumber(rawBillingAmount);
+  const rawPaymentUtr = String(formData.get('payment_utr') ?? '').trim();
+
+  if (rawBillingAmount != null && String(rawBillingAmount).trim() && billingAmount === null) {
+    throw new Error('Enter a valid bill amount.');
+  }
+
+  if (payment_state === 'paid' && billingAmount === null) {
+    throw new Error('Collected payment requires a bill amount.');
+  }
+
+  if (payment_state === 'paid' && payment_mode === 'upi' && !rawPaymentUtr) {
+    throw new Error('UPI payments require a UTR number.');
+  }
+
   const baseAppointmentInsert = {
     clinic_id: clinicId,
     patient_id: '',
@@ -242,6 +606,57 @@ export async function createAppointment(formData: FormData): Promise<{ appointme
   }
 
   await auditLog(clinicId, actorRole, 'appointment_created', apptId, { tokenNumber, visitType });
+
+  if (billingAmount !== null) {
+    const bill = await getOrCreateAppointmentBill(db, clinicId, apptId, actorRole);
+    const consultationLabel = visitType === 'follow-up' ? 'Follow-up consultation' : 'Consultation';
+
+    const { error: lineItemError } = await db.from('bill_line_items').insert({
+      clinic_id: clinicId,
+      bill_id: bill.id,
+      appointment_id: apptId,
+      item_type: 'consultation',
+      label: consultationLabel,
+      quantity: 1,
+      unit_amount: billingAmount,
+      line_total: billingAmount,
+      created_by_role: actorRole,
+    });
+
+    if (lineItemError) {
+      throw new Error(lineItemError.message);
+    }
+
+    let summary = await refreshBillSummary(db, clinicId, bill);
+
+    if (payment_state === 'paid') {
+      const { error: paymentError } = await db.from('payment_events').insert({
+        clinic_id: clinicId,
+        bill_id: bill.id,
+        appointment_id: apptId,
+        patient_id: patientId,
+        amount: billingAmount,
+        payment_mode,
+        payment_status: 'recorded',
+        utr_number: payment_mode === 'upi' ? rawPaymentUtr : null,
+        collected_by_role: actorRole,
+      });
+
+      if (paymentError) {
+        throw new Error(paymentError.message);
+      }
+
+      summary = await refreshBillSummary(db, clinicId, bill);
+    }
+
+    await auditLog(clinicId, actorRole, 'bill_seeded', apptId, {
+      bill_id: summary.bill_id,
+      total_amount: summary.total_amount,
+      amount_paid: summary.amount_paid,
+      amount_due: summary.amount_due,
+      payment_mode: payment_state === 'paid' ? payment_mode : null,
+    });
+  }
 
   // Get slug for redirect
   const { data: clinic } = await db.from('clinics').select('slug').eq('id', clinicId).single();
@@ -537,7 +952,8 @@ export async function getClinicQueue(date?: string): Promise<QueueItem[]> {
 
   if (error) throw new Error(error.message);
 
-  return applyPaymentAuditFallback(db, clinicId, (data ?? []) as QueueItem[]);
+  const withPaymentFallback = await applyPaymentAuditFallback(db, clinicId, (data ?? []) as QueueItem[]);
+  return attachBillSummaries(db, clinicId, withPaymentFallback);
 }
 
 export async function getPatientHistory(phone: string): Promise<Appointment[]> {
@@ -854,6 +1270,69 @@ export async function getPatientProfile(
     appointments: (appointmentsResult.data ?? []) as Appointment[],
     visitHistory: (historyResult.data ?? []) as VisitHistory[],
   };
+}
+
+export async function createPatientPortalLink(
+  patientId: string
+): Promise<{ url?: string; success: boolean; error?: string }> {
+  const session = await requireSession();
+  const clinicId = session.clinicId;
+  const actorRole = session.role;
+  const db = getClinicDb(clinicId);
+
+  const { data: patient, error: patientError } = await db
+    .from('patients')
+    .select('id, name, phone')
+    .eq('clinic_id', clinicId)
+    .eq('id', patientId)
+    .maybeSingle();
+
+  if (patientError) {
+    throw new Error(patientError.message);
+  }
+  if (!patient) {
+    throw new Error('Patient not found for this clinic.');
+  }
+  if (!patient.phone) {
+    return { success: false, error: 'Patient phone number is missing.' };
+  }
+
+  const clinic = await getClinicIdentity(clinicId);
+  const token = await createPatientToken(patient.id, clinicId, actorRole);
+  const url = buildPatientPortalUrl({
+    slug: clinic.slug,
+    token,
+    customDomain: clinic.custom_domain,
+  });
+
+  if (!url) {
+    return { success: false, error: 'APP_URL is not configured for portal links.' };
+  }
+
+  const { sendPortalLink } = await import('@/lib/whatsappAdapter');
+  const result = await sendPortalLink({
+    toPhone: patient.phone,
+    patientName: patient.name,
+    clinicName: clinic.name,
+    portalUrl: url,
+  });
+
+  await auditLog(clinicId, actorRole, 'sent_portal_link', patientId, {
+    success: result.success,
+    to_phone: patient.phone,
+    portal_url: url,
+    error: result.error ?? null,
+  });
+
+  if (!result.success) {
+    return {
+      success: false,
+      error: result.error ?? 'Could not send WhatsApp message.',
+      url,
+    };
+  }
+
+  return { success: true, url };
 }
 
 export async function updatePatient(
@@ -1248,12 +1727,16 @@ export async function getAppointmentDetails(
   if (!appointment) {
     return null;
   }
+  const [appointmentWithBilling] = await attachBillSummaries(db, clinicId, [appointment]);
+  if (!appointmentWithBilling) {
+    return null;
+  }
 
   const { data: recentHistory } = await db
     .from('visit_history')
     .select('*')
     .eq('clinic_id', clinicId)
-    .eq('patient_id', appointment.patient_id)
+    .eq('patient_id', appointmentWithBilling.patient_id)
     .order('created_at', { ascending: false })
     .limit(3);
 
@@ -1269,7 +1752,7 @@ export async function getAppointmentDetails(
     .from('appointments')
     .select('id, clinic_id, patient_id, complaint, booked_for, visit_type, status')
     .eq('clinic_id', clinicId)
-    .eq('patient_id', appointment.patient_id)
+    .eq('patient_id', appointmentWithBilling.patient_id)
     .neq('id', appointmentId)
     .eq('status', 'completed')
     .order('booked_for', { ascending: false })
@@ -1306,7 +1789,7 @@ export async function getAppointmentDetails(
     .slice(0, 3);
 
   return {
-    ...appointment,
+    ...appointmentWithBilling,
     recentHistory: combinedRecentHistory,
   };
 }
@@ -1399,44 +1882,52 @@ export async function saveVisitRecord(
   await updateAppointmentStatus(appointmentId, 'completed', summary);
 }
 
-export async function updateAppointmentPayment(
+export async function addAppointmentCharge(
   appointmentId: string,
-  paymentMode: 'cash' | 'upi',
-  paymentState: 'pending' | 'paid'
-): Promise<{ persisted: boolean; storage: 'appointment' | 'audit' }> {
+  label: string,
+  amountInput: string,
+  itemType: BillLineItem['item_type'] = 'service'
+): Promise<BillSummary> {
   const { clinicId, db } = await getTenantDb();
   const actorRole = await getActorRole();
-  const paymentStatus = paymentState === 'paid' ? 'verified' : 'pending';
 
-  const { error } = await db
-    .from('appointments')
-    .update({
-      payment_mode: paymentMode,
-      payment_status: paymentStatus,
-    })
-    .eq('id', appointmentId)
-    .eq('clinic_id', clinicId)
-    .select('id')
-    .single();
-
-  let storage: 'appointment' | 'audit' = 'appointment';
-
-  if (error) {
-    const missingPaymentColumn =
-      error.message.includes('payment_mode') ||
-      error.message.includes('payment_status');
-
-    if (!missingPaymentColumn) {
-      throw new Error(error.message);
-    }
-
-    storage = 'audit';
+  if (actorRole === 'doctor') {
+    throw new Error('Doctors cannot edit billing in V1.');
   }
 
-  await auditLog(clinicId, actorRole, 'payment_updated', appointmentId, {
-    payment_mode: paymentMode,
-    payment_state: paymentState,
-    payment_status: paymentStatus,
+  const normalizedLabel = label.trim();
+  if (!normalizedLabel) {
+    throw new Error('Charge label is required.');
+  }
+
+  const amount = toMoneyNumber(amountInput);
+  if (amount === null || amount <= 0) {
+    throw new Error('Enter a valid charge amount.');
+  }
+
+  const bill = await getOrCreateAppointmentBill(db, clinicId, appointmentId, actorRole);
+  const { error: lineItemError } = await db.from('bill_line_items').insert({
+    clinic_id: clinicId,
+    bill_id: bill.id,
+    appointment_id: appointmentId,
+    item_type: itemType,
+    label: normalizedLabel,
+    quantity: 1,
+    unit_amount: amount,
+    line_total: amount,
+    created_by_role: actorRole,
+  });
+
+  if (lineItemError) {
+    throw new Error(lineItemError.message);
+  }
+
+  const summary = await refreshBillSummary(db, clinicId, bill);
+  await auditLog(clinicId, actorRole, 'bill_charge_added', appointmentId, {
+    bill_id: summary.bill_id,
+    label: normalizedLabel,
+    amount,
+    item_type: itemType,
   });
 
   const slug = await getClinicSlug(clinicId);
@@ -1445,7 +1936,99 @@ export async function updateAppointmentPayment(
   revalidatePath(`/${slug}/admin`);
   revalidatePath(`/${slug}/queue/${appointmentId}/consult`);
 
-  return { persisted: true, storage };
+  return summary;
+}
+
+export async function recordAppointmentPayment(
+  appointmentId: string,
+  amountInput: string,
+  paymentMode: 'cash' | 'upi',
+  utrNumber?: string
+): Promise<BillSummary> {
+  const { clinicId, db } = await getTenantDb();
+  const actorRole = await getActorRole();
+
+  if (actorRole === 'doctor') {
+    throw new Error('Doctors cannot collect billing in V1.');
+  }
+
+  const amount = toMoneyNumber(amountInput);
+  if (amount === null || amount <= 0) {
+    throw new Error('Enter a valid payment amount.');
+  }
+
+  const normalizedUtr = utrNumber?.trim() ?? '';
+  if (paymentMode === 'upi' && !normalizedUtr) {
+    throw new Error('UPI payments require a UTR number.');
+  }
+
+  const bill = await getOrCreateAppointmentBill(db, clinicId, appointmentId, actorRole);
+  const summaryBeforePayment = await refreshBillSummary(db, clinicId, bill);
+
+  if (summaryBeforePayment.total_amount <= 0) {
+    throw new Error('Add a bill amount before recording payment.');
+  }
+  if (amount > summaryBeforePayment.amount_due) {
+    throw new Error(`Payment exceeds due amount of ₹${summaryBeforePayment.amount_due.toFixed(2)}.`);
+  }
+
+  const { data: appointment, error: appointmentError } = await db
+    .from('appointments')
+    .select('patient_id')
+    .eq('clinic_id', clinicId)
+    .eq('id', appointmentId)
+    .single();
+
+  if (appointmentError) {
+    throw new Error(appointmentError.message);
+  }
+
+  const { error: paymentError } = await db.from('payment_events').insert({
+    clinic_id: clinicId,
+    bill_id: bill.id,
+    appointment_id: appointmentId,
+    patient_id: appointment.patient_id,
+    amount,
+    payment_mode: paymentMode,
+    payment_status: 'recorded',
+    utr_number: paymentMode === 'upi' ? normalizedUtr : null,
+    collected_by_role: actorRole,
+  });
+
+  if (paymentError) {
+    throw new Error(paymentError.message);
+  }
+
+  const summary = await refreshBillSummary(db, clinicId, bill);
+  await auditLog(clinicId, actorRole, 'payment_recorded', appointmentId, {
+    bill_id: summary.bill_id,
+    amount,
+    payment_mode: paymentMode,
+    utr_number: paymentMode === 'upi' ? normalizedUtr : null,
+    amount_due: summary.amount_due,
+  });
+
+  const slug = await getClinicSlug(clinicId);
+  revalidatePath(`/${slug}/queue`);
+  revalidatePath(`/${slug}/patients`);
+  revalidatePath(`/${slug}/admin`);
+  revalidatePath(`/${slug}/queue/${appointmentId}/consult`);
+
+  return summary;
+}
+
+export async function updateAppointmentPayment(
+  appointmentId: string,
+  paymentMode: 'cash' | 'upi',
+  paymentState: 'pending' | 'paid'
+): Promise<{ persisted: boolean; storage: 'appointment' | 'audit' }> {
+  void appointmentId;
+  void paymentMode;
+  if (paymentState === 'pending') {
+    return { persisted: true, storage: 'audit' };
+  }
+
+  throw new Error('Legacy payment update is disabled. Use recordAppointmentPayment instead.');
 }
 
 // ─── Demo Request ─────────────────────────────────────────────────────────────
@@ -1479,7 +2062,7 @@ export async function submitDemoRequest(input: {
 // ─── Patient Reports ──────────────────────────────────────────────────────────
 
 export async function getPatientReports(patientId: string): Promise<PatientReport[]> {
-  const { clinicId, db } = await getTenantDb();
+  const { db } = await getTenantDb();
 
   const { data, error } = await db
     .from('patient_reports')

@@ -1,6 +1,7 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { NextRequest, NextResponse } from 'next/server';
-import { headers } from 'next/headers';
+import { createPatientToken } from '@/lib/patientToken';
+import { COOKIE_NAME, verifySession } from '@/lib/session';
 import {
   sendAppointmentConfirmation,
   sendAppointmentReminder,
@@ -35,6 +36,8 @@ type DoctorRecord = {
 type ClinicRecord = {
   id: string;
   name: string;
+  slug: string;
+  custom_domain: string | null;
 };
 
 type CommunicationPayload = {
@@ -78,6 +81,27 @@ function formatLongDate(isoDate: string): string {
   });
 }
 
+function normalizeBaseUrl(value: string): string {
+  return value.replace(/\/+$/, '');
+}
+
+function buildPortalUrl(clinic: Pick<ClinicRecord, 'slug' | 'custom_domain'>, token: string): string {
+  const encodedToken = encodeURIComponent(token);
+  if (clinic.custom_domain?.trim()) {
+    const customBase = clinic.custom_domain.startsWith('http')
+      ? normalizeBaseUrl(clinic.custom_domain)
+      : `https://${normalizeBaseUrl(clinic.custom_domain)}`;
+    return `${customBase}/${clinic.slug}/portal/${encodedToken}`;
+  }
+
+  const appUrl = process.env.APP_URL?.trim();
+  if (!appUrl) {
+    return '';
+  }
+
+  return `${normalizeBaseUrl(appUrl)}/${clinic.slug}/portal/${encodedToken}`;
+}
+
 function isValidRequestBody(value: unknown): value is RequestBody {
   if (!value || typeof value !== 'object') {
     return false;
@@ -106,10 +130,14 @@ async function logEvent(payload: CommunicationPayload): Promise<void> {
 }
 
 export async function POST(request: NextRequest) {
-  const clinicIdFromSession = (await headers()).get('x-clinic-id');
-  if (!clinicIdFromSession) {
+  const sessionToken = request.cookies.get(COOKIE_NAME)?.value;
+  const session = sessionToken ? verifySession(sessionToken) : null;
+
+  if (!session) {
     return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
   }
+
+  const clinicIdFromSession = session.clinicId;
   let appointmentId = '';
   let messageType: RequestBody['type'] = 'confirmation';
   let clinicId: string | null = null;
@@ -154,7 +182,7 @@ export async function POST(request: NextRequest) {
       await Promise.all([
         db.from('patients').select('id, name, phone').eq('id', appointment.patient_id).single<PatientRecord>(),
         db.from('doctors').select('id, name').eq('id', appointment.doctor_id).single<DoctorRecord>(),
-        db.from('clinics').select('id, name').eq('id', appointment.clinic_id).single<ClinicRecord>(),
+        db.from('clinics').select('id, name, slug, custom_domain').eq('id', appointment.clinic_id).single<ClinicRecord>(),
       ]);
 
     if (patientError || !patient) {
@@ -206,9 +234,22 @@ export async function POST(request: NextRequest) {
       tokenNumber: appointment.token_number,
     };
 
+    let portalUrl = '';
+    if (messageType === 'confirmation') {
+      try {
+        const token = await createPatientToken(patient.id, appointment.clinic_id, 'system');
+        portalUrl = buildPortalUrl(clinic, token);
+      } catch {
+        portalUrl = '';
+      }
+    }
+
     const result =
       messageType === 'confirmation'
-        ? await sendAppointmentConfirmation(baseMessageParams)
+        ? await sendAppointmentConfirmation({
+            ...baseMessageParams,
+            portalUrl: portalUrl || undefined,
+          })
         : messageType === 'reminder'
           ? await sendAppointmentReminder(baseMessageParams)
           : await sendCancellationNotice({
@@ -231,6 +272,7 @@ export async function POST(request: NextRequest) {
         type: messageType,
         tokenNumber: appointment.token_number,
         bookedFor: appointment.booked_for,
+        portalUrl: portalUrl || null,
       },
       error_message: result.error ?? null,
     });

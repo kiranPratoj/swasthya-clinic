@@ -140,6 +140,8 @@ export default function PatientIntakeForm({
   const [detailsStepLabel, setDetailsStepLabel] = useState<'new' | 'existing' | 'shared-mobile'>('new');
   const [paymentMode, setPaymentMode] = useState<'cash' | 'upi'>('cash');
   const [paymentStatus, setPaymentStatus] = useState<'pending' | 'paid'>('pending');
+  const [billAmount, setBillAmount] = useState('');
+  const [paymentUtr, setPaymentUtr] = useState('');
   const [patientNameDirty, setPatientNameDirty] = useState(false);
   const [ageDirty, setAgeDirty] = useState(false);
   const [phoneDirty, setPhoneDirty] = useState(false);
@@ -412,6 +414,25 @@ export default function PatientIntakeForm({
     setSubmitError(null);
     setIsSubmitting(true);
 
+    const normalizedBillAmount = billAmount.trim();
+    if (normalizedBillAmount && Number.isNaN(Number(normalizedBillAmount.replace(/,/g, '')))) {
+      setSubmitError('Enter a valid bill amount.');
+      setIsSubmitting(false);
+      return;
+    }
+
+    if (paymentStatus === 'paid' && !normalizedBillAmount) {
+      setSubmitError('Collected payment requires a bill amount.');
+      setIsSubmitting(false);
+      return;
+    }
+
+    if (paymentStatus === 'paid' && paymentMode === 'upi' && !paymentUtr.trim()) {
+      setSubmitError('UPI payment requires a UTR number.');
+      setIsSubmitting(false);
+      return;
+    }
+
     const formData = new FormData(event.currentTarget);
     formData.set('patientName', patientName.trim());
     formData.set('age', age.trim());
@@ -421,6 +442,8 @@ export default function PatientIntakeForm({
     formData.set('doctorId', doctorId);
     formData.set('bookedFor', bookedFor);
     formData.set('allowSharedMobileNewPatient', allowSharedMobileNewPatient ? 'true' : 'false');
+    formData.set('billing_amount', normalizedBillAmount);
+    formData.set('payment_utr', paymentUtr.trim());
 
     try {
       const result = await createAppointment(formData);
@@ -468,6 +491,10 @@ export default function PatientIntakeForm({
     setConfirmedToken(null);
     setDetailsStepVisible(false);
     setDetailsStepLabel('new');
+    setPaymentMode('cash');
+    setPaymentStatus('pending');
+    setBillAmount('');
+    setPaymentUtr('');
     setPatientNameDirty(false);
     setAgeDirty(false);
     setPhoneDirty(false);
@@ -1183,6 +1210,51 @@ export default function PatientIntakeForm({
                   ))}
                 </div>
               </div>
+              <div style={{ display: 'grid', gap: '0.45rem' }}>
+                <label
+                  htmlFor="billingAmount"
+                  style={{
+                    fontSize: '0.75rem',
+                    fontWeight: 700,
+                    color: 'var(--color-text-muted)',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.07em',
+                  }}
+                >
+                  Bill Amount (₹)
+                </label>
+                <input
+                  id="billingAmount"
+                  name="billing_amount"
+                  inputMode="decimal"
+                  value={billAmount}
+                  onChange={(event) => setBillAmount(event.target.value)}
+                  placeholder="e.g. 300"
+                />
+              </div>
+              {paymentStatus === 'paid' && paymentMode === 'upi' && (
+                <div style={{ display: 'grid', gap: '0.45rem' }}>
+                  <label
+                    htmlFor="paymentUtr"
+                    style={{
+                      fontSize: '0.75rem',
+                      fontWeight: 700,
+                      color: 'var(--color-text-muted)',
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.07em',
+                    }}
+                  >
+                    UTR Number
+                  </label>
+                  <input
+                    id="paymentUtr"
+                    name="payment_utr"
+                    value={paymentUtr}
+                    onChange={(event) => setPaymentUtr(event.target.value)}
+                    placeholder="Enter UTR"
+                  />
+                </div>
+              )}
               <input type="hidden" name="payment_mode" value={paymentMode} />
               <input type="hidden" name="payment_state" value={paymentStatus} />
             </div>

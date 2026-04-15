@@ -427,6 +427,30 @@ export default function QueueDisplay({
                         <span style={{ display: 'inline-flex', alignItems: 'center', padding: '0.3rem 0.6rem', borderRadius: '999px', background: item.status === 'in_progress' ? 'var(--color-warning-bg)' : item.status === 'completed' ? 'var(--color-success-bg)' : 'var(--color-primary-soft)', color: item.status === 'in_progress' ? 'var(--color-warning)' : item.status === 'completed' ? 'var(--color-success)' : 'var(--color-primary)', fontSize: '0.75rem', fontWeight: 800, textTransform: 'capitalize' }}>
                           {formatStatusLabel(item.status)}
                         </span>
+                        {item.bill_summary && item.bill_summary.total_amount > 0 && (
+                          <span
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              padding: '0.3rem 0.6rem',
+                              borderRadius: '999px',
+                              background:
+                                item.bill_summary.amount_due > 0
+                                  ? 'var(--color-warning-bg)'
+                                  : 'var(--color-success-bg)',
+                              color:
+                                item.bill_summary.amount_due > 0
+                                  ? 'var(--color-warning)'
+                                  : 'var(--color-success)',
+                              fontSize: '0.75rem',
+                              fontWeight: 800,
+                            }}
+                          >
+                            {item.bill_summary.amount_due > 0
+                              ? `₹${item.bill_summary.amount_due.toFixed(0)} due`
+                              : `Paid ₹${item.bill_summary.amount_paid.toFixed(0)}`}
+                          </span>
+                        )}
                       </div>
                     </Link>
                   ) : (
@@ -451,6 +475,30 @@ export default function QueueDisplay({
                         <span style={{ display: 'inline-flex', alignItems: 'center', padding: '0.3rem 0.6rem', borderRadius: '999px', background: item.status === 'in_progress' ? 'var(--color-warning-bg)' : item.status === 'completed' ? 'var(--color-success-bg)' : 'var(--color-primary-soft)', color: item.status === 'in_progress' ? 'var(--color-warning)' : item.status === 'completed' ? 'var(--color-success)' : 'var(--color-primary)', fontSize: '0.75rem', fontWeight: 800, textTransform: 'capitalize' }}>
                           {formatStatusLabel(item.status)}
                         </span>
+                        {item.bill_summary && item.bill_summary.total_amount > 0 && (
+                          <span
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              padding: '0.3rem 0.6rem',
+                              borderRadius: '999px',
+                              background:
+                                item.bill_summary.amount_due > 0
+                                  ? 'var(--color-warning-bg)'
+                                  : 'var(--color-success-bg)',
+                              color:
+                                item.bill_summary.amount_due > 0
+                                  ? 'var(--color-warning)'
+                                  : 'var(--color-success)',
+                              fontSize: '0.75rem',
+                              fontWeight: 800,
+                            }}
+                          >
+                            {item.bill_summary.amount_due > 0
+                              ? `₹${item.bill_summary.amount_due.toFixed(0)} due`
+                              : `Paid ₹${item.bill_summary.amount_paid.toFixed(0)}`}
+                          </span>
+                        )}
                       </div>
                     </div>
                   )}
@@ -484,8 +532,7 @@ export default function QueueDisplay({
                         <AppointmentActionsMenu
                           appointmentId={item.id}
                           currentStatus={item.status}
-                          paymentMode={item.payment_mode}
-                          paymentStatus={item.payment_status}
+                          billSummary={item.bill_summary}
                           patientName={item.patient.name}
                           role={role}
                         />

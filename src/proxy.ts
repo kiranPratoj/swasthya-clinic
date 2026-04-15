@@ -16,8 +16,8 @@ const PUBLIC_PREFIXES = [
   '/globe.svg',
 ];
 
-// Clinic-scoped paths that are public (none in V1 — self-booking is post-V1)
-const PUBLIC_SLUG_SUFFIXES: string[] = [];
+// Clinic-scoped paths that are public.
+const PUBLIC_SLUG_SUFFIXES: string[] = ['/book', '/portal'];
 
 function isPublicPath(pathname: string): boolean {
   return PUBLIC_PREFIXES.some((p) => pathname.startsWith(p));
