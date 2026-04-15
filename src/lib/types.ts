@@ -189,3 +189,38 @@ export type PatientWithHistory = {
   patient: Patient;
   appointments: Appointment[];
 };
+
+// ─── Patient Reports ──────────────────────────────────────────────────────────
+
+export type ReportType = 'blood_test' | 'xray' | 'scan' | 'prescription' | 'other';
+
+export type ParsedTest = {
+  name: string;
+  value: string;
+  unit: string;
+  ref_range: string;
+  flag: 'high' | 'low' | 'normal' | null;
+};
+
+export type ParsedReportData = {
+  lab_name?: string;
+  report_date?: string;
+  tests?: ParsedTest[];
+};
+
+export type PatientReport = {
+  id: string;
+  clinic_id: string;
+  patient_id: string;
+  appointment_id: string | null;
+  file_name: string;
+  file_path: string;
+  mime_type: string;
+  report_type: ReportType;
+  raw_summary: string | null;
+  parsed_data: ParsedReportData | null;
+  uploaded_by_role: string | null;
+  created_at: string;
+  signedUrl: string; // populated at read time — not stored in DB
+};
+

@@ -2,21 +2,27 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { cancelAppointment, markNoShow, rescheduleAppointment } from '@/app/actions';
-import type { AppointmentStatus } from '@/lib/types';
+import { cancelAppointment, markNoShow, rescheduleAppointment, updateAppointmentPayment } from '@/app/actions';
+import type { AppointmentStatus, UserRole } from '@/lib/types';
 
 type Props = {
   appointmentId: string;
   currentStatus: AppointmentStatus;
+  paymentMode: 'cash' | 'upi' | null | undefined;
+  paymentStatus: 'pending' | 'verified' | 'failed';
   patientName: string;
+  role: UserRole;
 };
 
-type Mode = 'idle' | 'cancel' | 'reschedule';
+type Mode = 'idle' | 'cancel' | 'reschedule' | 'payment';
 
 export default function AppointmentActionsMenu({
   appointmentId,
   currentStatus,
+  paymentMode,
+  paymentStatus,
   patientName,
+  role,
 }: Props) {
   const router = useRouter();
   const rootRef = useRef<HTMLDivElement | null>(null);
@@ -24,8 +30,13 @@ export default function AppointmentActionsMenu({
   const [mode, setMode] = useState<Mode>('idle');
   const [reason, setReason] = useState('');
   const [newDate, setNewDate] = useState('');
+  const [nextPaymentMode, setNextPaymentMode] = useState<'cash' | 'upi'>(paymentMode ?? 'cash');
+  const [nextPaymentState, setNextPaymentState] = useState<'pending' | 'paid'>(
+    paymentStatus === 'verified' ? 'paid' : 'pending'
+  );
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const canManagePayment = role === 'receptionist' || role === 'admin';
 
   useEffect(() => {
     function handleOutsideClick(event: MouseEvent) {
@@ -52,6 +63,8 @@ export default function AppointmentActionsMenu({
       setMode('idle');
       setReason('');
       setNewDate('');
+      setNextPaymentMode(paymentMode ?? 'cash');
+      setNextPaymentState(paymentStatus === 'verified' ? 'paid' : 'pending');
       router.refresh();
     } catch (actionError: unknown) {
       setError(
@@ -80,7 +93,7 @@ export default function AppointmentActionsMenu({
     <div ref={rootRef} style={{ position: 'relative', justifySelf: 'end' }}>
       <button
         type="button"
-        disabled={isLoading || currentStatus === 'completed'}
+        disabled={isLoading || (currentStatus === 'completed' && !canManagePayment)}
         onClick={() => {
           setIsOpen((open) => !open);
           setMode('idle');
@@ -120,7 +133,27 @@ export default function AppointmentActionsMenu({
         >
           {mode === 'idle' && (
             <>
-              {[
+              {canManagePayment && (
+                <button
+                  type="button"
+                  disabled={isLoading}
+                  onClick={() => {
+                    setNextPaymentMode(paymentMode ?? 'cash');
+                    setNextPaymentState(paymentStatus === 'verified' ? 'paid' : 'pending');
+                    setMode('payment');
+                  }}
+                  style={{
+                    width: '100%', textAlign: 'left', padding: '0.65rem 0.875rem',
+                    borderRadius: 'var(--radius-md)', border: 'none',
+                    background: 'var(--color-success-bg)', color: 'var(--color-success)',
+                    fontWeight: 700, fontSize: '0.875rem',
+                    opacity: isLoading ? 0.6 : 1,
+                  }}
+                >
+                  Update payment
+                </button>
+              )}
+              {currentStatus !== 'completed' && [
                 { label: 'Cancel appointment', color: 'var(--color-error)', bg: 'var(--color-error-bg)', onClick: () => setMode('cancel') },
                 { label: 'Mark as no-show',    color: 'var(--color-warning)', bg: 'var(--color-warning-bg)', onClick: () => void runAction(() => markNoShow(appointmentId)) },
                 { label: 'Reschedule',         color: 'var(--color-primary)', bg: 'var(--color-primary-soft)', onClick: () => setMode('reschedule') },
@@ -140,6 +173,75 @@ export default function AppointmentActionsMenu({
                   {label}
                 </button>
               ))}
+            </>
+          )}
+
+          {mode === 'payment' && (
+            <>
+              <p style={{ fontSize: '0.825rem', fontWeight: 700, color: 'var(--color-text-muted)' }}>
+                Update payment for {patientName}
+              </p>
+              <div style={{ display: 'grid', gap: '0.45rem' }}>
+                <span style={{ fontSize: '0.76rem', fontWeight: 700, color: 'var(--color-text-muted)' }}>Mode</span>
+                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                  {(['cash', 'upi'] as const).map((modeOption) => (
+                    <button
+                      key={modeOption}
+                      type="button"
+                      disabled={isLoading}
+                      onClick={() => setNextPaymentMode(modeOption)}
+                      style={{
+                        ...ghostBtn,
+                        flex: 1,
+                        border: nextPaymentMode === modeOption ? '2px solid var(--color-primary)' : '1px solid var(--color-border)',
+                        color: nextPaymentMode === modeOption ? 'var(--color-primary)' : 'var(--color-text)',
+                        background: nextPaymentMode === modeOption ? 'var(--color-primary-soft)' : 'white',
+                      }}
+                    >
+                      {modeOption === 'cash' ? 'Cash' : 'UPI'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div style={{ display: 'grid', gap: '0.45rem' }}>
+                <span style={{ fontSize: '0.76rem', fontWeight: 700, color: 'var(--color-text-muted)' }}>Status</span>
+                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                  {(['pending', 'paid'] as const).map((stateOption) => (
+                    <button
+                      key={stateOption}
+                      type="button"
+                      disabled={isLoading}
+                      onClick={() => setNextPaymentState(stateOption)}
+                      style={{
+                        ...ghostBtn,
+                        flex: 1,
+                        border: nextPaymentState === stateOption ? '2px solid var(--color-primary)' : '1px solid var(--color-border)',
+                        color: nextPaymentState === stateOption ? 'var(--color-primary)' : 'var(--color-text)',
+                        background: nextPaymentState === stateOption ? 'var(--color-primary-soft)' : 'white',
+                      }}
+                    >
+                      {stateOption === 'paid' ? 'Paid' : 'Pending'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: '0.5rem' }}>
+                <button type="button" disabled={isLoading} onClick={() => setMode('idle')} style={ghostBtn}>
+                  Back
+                </button>
+                <button
+                  type="button"
+                  disabled={isLoading}
+                  onClick={() =>
+                    void runAction(async () => {
+                      await updateAppointmentPayment(appointmentId, nextPaymentMode, nextPaymentState);
+                    })
+                  }
+                  style={{ ...actionBtn, background: 'var(--color-primary)' }}
+                >
+                  {isLoading ? 'Saving...' : 'Save payment'}
+                </button>
+              </div>
             </>
           )}
 

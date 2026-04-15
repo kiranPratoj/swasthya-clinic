@@ -2,8 +2,9 @@
 
 import { useState, useRef, FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
-import { generateSoapNote, saveVisitRecord, updateAppointmentPayment } from '@/app/actions';
-import type { QueueItem, VisitHistory } from '@/lib/types';
+import { generateSoapNote, saveVisitRecord } from '@/app/actions';
+import type { QueueItem, VisitHistory, PatientReport } from '@/lib/types';
+import ReportCard from '@/components/reports/ReportCard';
 
 type PrescriptionRow = {
   drug: string;
@@ -18,12 +19,13 @@ type SOAPNote = {
   plan: string;
 };
 
-type ConsultStep = 'consult' | 'billing' | 'print';
+type ConsultStep = 'consult' | 'print';
 
 type Props = {
   appointment: QueueItem & { recentHistory?: VisitHistory[] };
   slug: string;
   clinicName: string;
+  reports: PatientReport[];
 };
 
 function getTodayIsoDate(): string {
@@ -65,7 +67,7 @@ function buildSoapFallback(transcript: string): SOAPNote {
   };
 }
 
-export default function ConsultForm({ appointment, slug, clinicName }: Props) {
+export default function ConsultForm({ appointment, slug, clinicName, reports }: Props) {
   const router = useRouter();
   const doctorName = formatDoctorName(appointment.doctor?.name);
   const [isRecording, setIsRecording] = useState(false);
@@ -86,18 +88,9 @@ export default function ConsultForm({ appointment, slug, clinicName }: Props) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [step, setStep] = useState<ConsultStep>('consult');
 
-  // Billing state
-  const [paymentMode, setPaymentMode] = useState<'cash' | 'upi'>('cash');
-  const [paymentAmount, setPaymentAmount] = useState('');
-  const [paymentUtr, setPaymentUtr] = useState('');
-  const [isBillingSubmitting, setIsBillingSubmitting] = useState(false);
-  const [paidAmount, setPaidAmount] = useState<string | null>(null);
-  const [paidMode, setPaidMode] = useState<'cash' | 'upi'>('cash');
-
   const printablePrescription = prescription.filter(
     (entry) => entry.drug.trim() || entry.dose.trim() || entry.frequency.trim()
   );
-
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const recordingStartTimeRef = useRef<number>(0);
@@ -203,7 +196,7 @@ export default function ConsultForm({ appointment, slug, clinicName }: Props) {
     setIsSubmitting(true);
     try {
       await saveVisitRecord(appointment.id, soap, diagnosis, prescription, followUpDate);
-      setStep('billing');
+      setStep('print');
     } catch (err) {
       console.error('Submit error:', err);
       alert('Failed to save visit record.');
@@ -211,133 +204,6 @@ export default function ConsultForm({ appointment, slug, clinicName }: Props) {
       setIsSubmitting(false);
     }
   };
-
-  const handleMarkPaid = async () => {
-    if (isBillingSubmitting) return;
-    setIsBillingSubmitting(true);
-    try {
-      await updateAppointmentPayment(appointment.id, paymentMode, 'paid');
-      setPaidAmount(paymentAmount || null);
-      setPaidMode(paymentMode);
-      setStep('print');
-    } catch (err) {
-      console.error('Payment error:', err);
-      alert('Failed to record payment. You can update it manually from the queue.');
-      setStep('print');
-    } finally {
-      setIsBillingSubmitting(false);
-    }
-  };
-
-  const handleSkipBilling = async () => {
-    try {
-      await updateAppointmentPayment(appointment.id, paymentMode, 'pending');
-    } catch {
-      // Non-fatal — consult is already saved
-    }
-    setStep('print');
-  };
-
-  if (step === 'billing') {
-    return (
-      <div style={{ background: 'white', padding: '2rem', borderRadius: 'var(--radius-lg)', boxShadow: 'var(--shadow-md)', maxWidth: '28rem', margin: '0 auto' }}>
-        <div style={{ marginBottom: '1.5rem' }}>
-          <h2 style={{ fontSize: '1.25rem', fontWeight: 800, margin: '0 0 0.25rem' }}>Billing &amp; Payment</h2>
-          <p style={{ color: 'var(--color-text-muted)', fontSize: '0.88rem', margin: 0 }}>
-            {appointment.patient.name} · Token #{appointment.token_number}
-          </p>
-        </div>
-
-        <div style={{ display: 'grid', gap: '1.25rem' }}>
-          <div>
-            <label>Consultation Fee (₹)</label>
-            <input
-              type="number"
-              min="0"
-              placeholder="e.g. 300"
-              value={paymentAmount}
-              onChange={e => setPaymentAmount(e.target.value)}
-            />
-          </div>
-
-          <div>
-            <label>Payment Mode</label>
-            <div style={{ display: 'flex', gap: '0.75rem', marginTop: '0.35rem' }}>
-              {(['cash', 'upi'] as const).map(mode => (
-                <button
-                  key={mode}
-                  type="button"
-                  onClick={() => setPaymentMode(mode)}
-                  style={{
-                    flex: 1,
-                    padding: '0.65rem',
-                    border: `2px solid ${paymentMode === mode ? 'var(--color-primary)' : 'var(--color-border)'}`,
-                    borderRadius: 'var(--radius-md)',
-                    background: paymentMode === mode ? 'var(--color-primary-soft)' : 'white',
-                    color: paymentMode === mode ? 'var(--color-primary)' : 'var(--color-text)',
-                    fontWeight: 700,
-                    fontSize: '0.9rem',
-                    textTransform: 'uppercase',
-                    cursor: 'pointer',
-                  }}
-                >
-                  {mode === 'cash' ? '💵 Cash' : '📱 UPI'}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {paymentMode === 'upi' && (
-            <div>
-              <label>UTR / Reference (optional)</label>
-              <input
-                type="text"
-                placeholder="e.g. 123456789012"
-                value={paymentUtr}
-                onChange={e => setPaymentUtr(e.target.value)}
-              />
-            </div>
-          )}
-        </div>
-
-        <div style={{ display: 'grid', gap: '0.75rem', marginTop: '2rem' }}>
-          <button
-            type="button"
-            onClick={handleMarkPaid}
-            disabled={isBillingSubmitting}
-            style={{
-              padding: '0.9rem',
-              background: 'var(--color-accent)',
-              color: 'white',
-              border: 'none',
-              borderRadius: 'var(--radius-md)',
-              fontWeight: 800,
-              fontSize: '1rem',
-              cursor: isBillingSubmitting ? 'not-allowed' : 'pointer',
-            }}
-          >
-            {isBillingSubmitting ? 'Recording…' : '✓ Mark as Paid'}
-          </button>
-          <button
-            type="button"
-            onClick={handleSkipBilling}
-            disabled={isBillingSubmitting}
-            style={{
-              padding: '0.65rem',
-              background: 'none',
-              color: 'var(--color-text-muted)',
-              border: 'none',
-              fontSize: '0.88rem',
-              cursor: 'pointer',
-              textDecoration: 'underline',
-            }}
-          >
-            Skip — collect payment later
-          </button>
-        </div>
-      </div>
-    );
-  }
 
   if (step === 'print') {
     return (
@@ -398,15 +264,14 @@ export default function ConsultForm({ appointment, slug, clinicName }: Props) {
             </div>
           )}
 
-          {paidAmount ? (
-            <div style={{ marginBottom: '1rem' }}>
-              <p><strong>Payment:</strong> Paid — ₹{paidAmount} · {paidMode.toUpperCase()}</p>
-            </div>
-          ) : (
-            <div style={{ marginBottom: '1rem' }}>
-              <p><strong>Payment:</strong> Pending</p>
-            </div>
-          )}
+          <div style={{ marginBottom: '1rem' }}>
+            <p>
+              <strong>Payment:</strong>{' '}
+              {appointment.payment_status === 'verified'
+                ? `Paid${appointment.payment_mode ? ` · ${appointment.payment_mode.toUpperCase()}` : ''}`
+                : 'Pending'}
+            </p>
+          </div>
 
           <div style={{ marginTop: '4rem', textAlign: 'right' }}>
             <div style={{ display: 'inline-block', borderTop: '1px solid #333', paddingTop: '0.5rem', minWidth: '150px', textAlign: 'center' }}>
@@ -473,6 +338,21 @@ export default function ConsultForm({ appointment, slug, clinicName }: Props) {
 
   return (
     <div style={{ display: 'grid', gap: '2rem' }}>
+
+      {/* ── 0. Patient reports (read-only) ──────────────────────────────────── */}
+      {reports.length > 0 && (
+        <section className="card" style={{ display: 'grid', gap: '0.75rem' }}>
+          <h2 style={{ fontSize: '1rem', fontWeight: 800, margin: 0 }}>
+            Patient Reports
+            <span style={{ fontSize: '0.75rem', fontWeight: 500, color: 'var(--color-text-muted)', marginLeft: '0.5rem' }}>({reports.length})</span>
+          </h2>
+          <div style={{ display: 'grid', gap: '0.65rem' }}>
+            {reports.map(report => (
+              <ReportCard key={report.id} report={report} />
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* ── 1. Voice recording — primary CTA, always at top ─────────────────── */}
       <section

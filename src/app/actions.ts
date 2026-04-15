@@ -11,6 +11,7 @@ import type {
   Doctor,
   OnboardingInput,
   Patient,
+  PatientReport,
   PatientWithHistory,
   QueueItem,
   VisitHistory,
@@ -111,7 +112,9 @@ export async function createAppointment(formData: FormData): Promise<{ appointme
   const bookedFor = (formData.get('bookedFor') as string) || new Date().toISOString().split('T')[0];
   const requestedDoctorId = formData.get('doctorId') as string | null;
   const payment_mode = (formData.get('payment_mode') as 'cash' | 'upi' | null) ?? 'cash';
-  const payment_state = (formData.get('payment_state') as 'pending' | 'paid' | null) ?? 'pending';
+  const payment_state =
+    (formData.get('payment_state') as 'pending' | 'paid' | null) ??
+    ((formData.get('payment_status') as 'pending' | 'paid' | null) ?? 'pending');
   const payment_status = payment_state === 'paid' ? 'verified' : 'pending';
   const baseAppointmentInsert = {
     clinic_id: clinicId,
@@ -1254,9 +1257,57 @@ export async function getAppointmentDetails(
     .order('created_at', { ascending: false })
     .limit(3);
 
+  const historyRows = ((recentHistory ?? []) as VisitHistory[]).filter(
+    (visit) => visit.appointment_id !== appointmentId
+  );
+
+  const representedAppointmentIds = new Set(
+    historyRows.map((visit) => visit.appointment_id).filter(Boolean)
+  );
+
+  const { data: fallbackAppointments } = await db
+    .from('appointments')
+    .select('id, clinic_id, patient_id, complaint, booked_for, visit_type, status')
+    .eq('clinic_id', clinicId)
+    .eq('patient_id', appointment.patient_id)
+    .neq('id', appointmentId)
+    .eq('status', 'completed')
+    .order('booked_for', { ascending: false })
+    .limit(5);
+
+  const synthesizedHistory = ((fallbackAppointments ?? []) as Array<{
+    id: string;
+    clinic_id: string;
+    patient_id: string;
+    complaint: string;
+    booked_for: string;
+    visit_type: string;
+    status: string;
+  }>)
+    .filter((item) => !representedAppointmentIds.has(item.id))
+    .map((item) => ({
+      id: `appointment-${item.id}`,
+      clinic_id: item.clinic_id,
+      patient_id: item.patient_id,
+      appointment_id: item.id,
+      created_at: `${item.booked_for}T00:00:00.000Z`,
+      summary: [
+        item.complaint?.trim() || 'Previous visit',
+        `Visit Type: ${item.visit_type}`,
+        `Status: ${item.status}`,
+      ].join('\n'),
+    }));
+
+  const combinedRecentHistory = [...historyRows, ...synthesizedHistory]
+    .sort(
+      (left, right) =>
+        new Date(right.created_at).getTime() - new Date(left.created_at).getTime()
+    )
+    .slice(0, 3);
+
   return {
     ...appointment,
-    recentHistory: (recentHistory ?? []) as VisitHistory[],
+    recentHistory: combinedRecentHistory,
   };
 }
 
@@ -1423,4 +1474,35 @@ export async function submitDemoRequest(input: {
   }
 
   return { success: true };
+}
+
+// ─── Patient Reports ──────────────────────────────────────────────────────────
+
+export async function getPatientReports(patientId: string): Promise<PatientReport[]> {
+  const { clinicId, db } = await getTenantDb();
+
+  const { data, error } = await db
+    .from('patient_reports')
+    .select('*')
+    .eq('patient_id', patientId)
+    .order('created_at', { ascending: false });
+
+  if (error || !data) return [];
+
+  // Generate a 1-hour signed URL for each report
+  const storageDb = getDb();
+  const reports: PatientReport[] = await Promise.all(
+    data.map(async (row) => {
+      const { data: urlData } = await storageDb.storage
+        .from('clinic-reports')
+        .createSignedUrl(row.file_path as string, 3600);
+
+      return {
+        ...row,
+        signedUrl: urlData?.signedUrl ?? '',
+      } as PatientReport;
+    })
+  );
+
+  return reports;
 }

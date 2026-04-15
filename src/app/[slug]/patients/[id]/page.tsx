@@ -1,9 +1,11 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { getPatientProfile } from '@/app/actions';
+import { getPatientProfile, getPatientReports } from '@/app/actions';
 import type { Appointment, VisitHistory } from '@/lib/types';
 import PatientEditForm from '../PatientEditForm';
 import { verifyRole } from '@/lib/auth';
+import ReportCard from '@/components/reports/ReportCard';
+import ReportUploadForm from '@/components/reports/ReportUploadForm';
 
 const PAGE_SIZE = 20;
 
@@ -238,7 +240,10 @@ export default async function PatientProfilePage({
 
   const { page } = await searchParams;
   const pageNumber = Math.max(1, Number.parseInt(page ?? '1', 10) || 1);
-  const profile = await getPatientProfile(id);
+  const [profile, reports] = await Promise.all([
+    getPatientProfile(id),
+    getPatientReports(id),
+  ]);
 
   if (!profile) {
     notFound();
@@ -389,6 +394,32 @@ export default async function PatientProfilePage({
           )}
         </section>
       )}
+
+      {/* ── Reports section ─────────────────────────────────────────────────── */}
+      <section className="card" style={{ display: 'grid', gap: '1rem' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '0.5rem' }}>
+          <div>
+            <h2 style={{ fontSize: '1rem', fontWeight: 800, margin: 0 }}>Reports &amp; Documents</h2>
+            <p style={{ color: 'var(--color-text-muted)', margin: '0.2rem 0 0', fontSize: '0.85rem' }}>
+              Lab results, X-rays, prescriptions, and other documents
+            </p>
+          </div>
+        </div>
+
+        <ReportUploadForm patientId={id} />
+
+        {reports.length > 0 ? (
+          <div style={{ display: 'grid', gap: '0.75rem' }}>
+            {reports.map(report => (
+              <ReportCard key={report.id} report={report} />
+            ))}
+          </div>
+        ) : (
+          <p style={{ color: 'var(--color-text-muted)', fontSize: '0.85rem', margin: 0 }}>
+            No reports uploaded yet.
+          </p>
+        )}
+      </section>
     </div>
   );
 }

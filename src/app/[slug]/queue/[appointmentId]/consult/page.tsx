@@ -1,5 +1,5 @@
 import { notFound } from 'next/navigation';
-import { getAppointmentDetails, getClinicName } from '@/app/actions';
+import { getAppointmentDetails, getClinicName, getPatientReports } from '@/app/actions';
 import ConsultForm from './ConsultForm';
 import { verifyRole } from '@/lib/auth';
 
@@ -14,6 +14,11 @@ export default async function ConsultPage({
     getAppointmentDetails(appointmentId),
     getClinicName(slug),
   ]);
+
+  // Reports fetched after appointment so we have the patient_id
+  const reports = appointment
+    ? await getPatientReports(appointment.patient_id)
+    : [];
 
   if (!appointment) {
     notFound();
@@ -44,7 +49,7 @@ export default async function ConsultPage({
           </div>
         </header>
 
-        <ConsultForm appointment={appointment} slug={slug} clinicName={clinicName} />
+        <ConsultForm appointment={appointment} slug={slug} clinicName={clinicName} reports={reports} />
       </div>
     </main>
   );

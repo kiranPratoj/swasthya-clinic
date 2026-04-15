@@ -10,6 +10,7 @@ const CLINIC_SCOPED_TABLES = new Set([
   'clinic_users',
   'communication_events',
   'doctors',
+  'patient_reports',
   'patients',
   'staff',
   'visit_history',
