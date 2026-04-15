@@ -1,36 +1,55 @@
-import { generateText, Output } from 'ai';
-import { z } from 'zod';
+import { SarvamAIClient } from 'sarvamai';
+import JSZip from 'jszip';
 import { requestSarvamToolObject } from './sarvamChatAdapter';
 import type { ParsedReportData } from './types';
-
-// Gateway model — haiku is fast and cheap for document extraction
-const VISION_MODEL = 'anthropic/claude-haiku-4.5';
-
-// Shared Zod schema for structured report data
-const ReportSchema = z.object({
-  lab_name: z.string().optional().describe('Name of the lab or hospital that issued the report'),
-  report_date: z.string().optional().describe('Report date in YYYY-MM-DD format'),
-  tests: z
-    .array(
-      z.object({
-        name: z.string().describe('Name of the test or parameter'),
-        value: z.string().describe('Measured value as a string'),
-        unit: z.string().describe('Unit of measurement (e.g. mg/dL, g/dL)'),
-        ref_range: z.string().describe('Reference range as printed (e.g. 70-100)'),
-        flag: z
-          .enum(['high', 'low', 'normal'])
-          .nullable()
-          .describe('Whether the value is high, low, or within normal range'),
-      })
-    )
-    .optional()
-    .describe('Individual test results'),
-});
 
 type ReportParseResult = {
   rawSummary: string | null;
   parsedData: ParsedReportData | null;
 };
+
+// Shared Sarvam tool parameters for structured extraction
+const EXTRACT_TOOL_PARAMS = {
+  toolName: 'extract_report',
+  toolDescription: 'Extracts structured lab report data from text',
+  parameters: {
+    type: 'object' as const,
+    properties: {
+      lab_name: { type: 'string', description: 'Name of the lab or hospital' },
+      report_date: { type: 'string', description: 'Date of the report (YYYY-MM-DD)' },
+      tests: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            name: { type: 'string' },
+            value: { type: 'string' },
+            unit: { type: 'string' },
+            ref_range: { type: 'string' },
+            flag: { type: 'string', enum: ['high', 'low', 'normal'] },
+          },
+          required: ['name', 'value'],
+        },
+      },
+    },
+  },
+};
+
+async function structureWithSarvam(text: string): Promise<ReportParseResult> {
+  const truncated = text.slice(0, 4000);
+  try {
+    const result = await requestSarvamToolObject<ParsedReportData>({
+      systemPrompt: 'You are a medical report parser. Extract structured data from the given lab report text.',
+      userPrompt: `Extract all test results from this lab report:\n\n${truncated}`,
+      ...EXTRACT_TOOL_PARAMS,
+    });
+    const parsed = result.parsed;
+    if (!parsed) return { rawSummary: text.slice(0, 500), parsedData: null };
+    return { rawSummary: buildSummary(parsed), parsedData: parsed };
+  } catch {
+    return { rawSummary: text.slice(0, 500), parsedData: null };
+  }
+}
 
 // ── PDF path: pdf-parse → text → Sarvam tool-calling ─────────────────────────
 
@@ -48,89 +67,93 @@ async function parsePdf(buffer: Buffer): Promise<ReportParseResult> {
   }
 
   if (!rawText) return { rawSummary: null, parsedData: null };
-
-  // Truncate to avoid Sarvam token overflow
-  const truncated = rawText.slice(0, 4000);
-
-  try {
-    const parsedResult = await requestSarvamToolObject<ParsedReportData>({
-      systemPrompt:
-        'You are a medical report parser. Extract structured data from the given lab report text.',
-      userPrompt: `Extract all test results from this lab report:\n\n${truncated}`,
-      toolName: 'extract_report',
-      toolDescription: 'Extracts structured lab report data from text',
-      parameters: {
-        type: 'object',
-        properties: {
-          lab_name: { type: 'string', description: 'Name of the lab or hospital' },
-          report_date: { type: 'string', description: 'Date of the report (YYYY-MM-DD)' },
-          tests: {
-            type: 'array',
-            items: {
-              type: 'object',
-              properties: {
-                name: { type: 'string' },
-                value: { type: 'string' },
-                unit: { type: 'string' },
-                ref_range: { type: 'string' },
-                flag: { type: 'string', enum: ['high', 'low', 'normal'] },
-              },
-              required: ['name', 'value'],
-            },
-          },
-        },
-      },
-    });
-
-    const parsed = parsedResult.parsed;
-    if (!parsed) return { rawSummary: rawText.slice(0, 500), parsedData: null };
-    return { rawSummary: buildSummary(parsed), parsedData: parsed };
-  } catch {
-    return { rawSummary: rawText.slice(0, 500), parsedData: null };
-  }
+  return structureWithSarvam(rawText);
 }
 
-// ── Image path: AI Gateway → Claude vision → generateText + Output.object ─────
+// ── Image path: Sarvam Document Intelligence (OCR) → Sarvam tool-calling ─────
 
 async function parseImage(buffer: Buffer, mimeType: string): Promise<ReportParseResult> {
-  if (!process.env.AI_GATEWAY_API_KEY) {
-    return { rawSummary: null, parsedData: null };
-  }
-
-  const base64 = buffer.toString('base64');
-
-  // AI SDK only accepts these specific image mime types
-  const imageType = (
-    mimeType === 'image/png'  ? 'image/png'  :
-    mimeType === 'image/webp' ? 'image/webp' :
-    mimeType === 'image/gif'  ? 'image/gif'  :
-    'image/jpeg'
-  ) as 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif';
+  const apiKey = process.env.SARVAM_API_KEY;
+  if (!apiKey) return { rawSummary: null, parsedData: null };
 
   try {
-    const { output } = await generateText({
-      model: VISION_MODEL,
-      output: Output.object({ schema: ReportSchema }),
-      messages: [
-        {
-          role: 'user',
-          content: [
-            {
-              type: 'image',
-              image: `data:${imageType};base64,${base64}`,
-            },
-            {
-              type: 'text',
-              text: 'This is a medical lab report. Extract all test results. For each test record the name, value, unit, reference range, and whether the value is high/low/normal. Also extract the lab name and report date if visible.',
-            },
-          ],
-        },
-      ],
-    });
+    const client = new SarvamAIClient({ apiSubscriptionKey: apiKey });
 
-    if (!output) return { rawSummary: null, parsedData: null };
-    const data = output as ParsedReportData;
-    return { rawSummary: buildSummary(data), parsedData: data };
+    // Sarvam Document Intelligence requires images packed in a ZIP
+    const zip = new JSZip();
+    const ext = mimeType === 'image/png' ? 'png' : mimeType === 'image/webp' ? 'webp' : 'jpg';
+    zip.file(`report.${ext}`, buffer);
+    const zipBuffer = await zip.generateAsync({ type: 'nodebuffer' });
+
+    // 1. Create job (cast to bypass SDK type — raw API uses snake_case fields)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const initResponse = await client.documentIntelligence.initialise(
+      { language: 'en-IN', output_format: 'md' } as any
+    );
+    const jobId = (initResponse as unknown as { job_id: string }).job_id;
+    if (!jobId) return { rawSummary: null, parsedData: null };
+
+    // 2. Get presigned upload URL
+    const uploadResponse = await client.documentIntelligence.getUploadLinks({
+      job_id: jobId,
+      files: ['report.zip'],
+    });
+    const uploadUrls = (uploadResponse as unknown as {
+      upload_urls: Record<string, { file_url: string; file_metadata?: Record<string, string> }>;
+    }).upload_urls ?? {};
+    const uploadInfo = Object.values(uploadUrls)[0];
+    if (!uploadInfo?.file_url) return { rawSummary: null, parsedData: null };
+
+    // 3. PUT zip to presigned URL
+    const putHeaders: Record<string, string> = { 'x-ms-blob-type': 'BlockBlob' };
+    if (uploadInfo.file_metadata) {
+      for (const [k, v] of Object.entries(uploadInfo.file_metadata)) {
+        if (typeof v === 'string') putHeaders[k] = v;
+      }
+    }
+    const putRes = await fetch(uploadInfo.file_url, { method: 'PUT', headers: putHeaders, body: new Uint8Array(zipBuffer) });
+    if (!putRes.ok) return { rawSummary: null, parsedData: null };
+
+    // 4. Start processing
+    await client.documentIntelligence.start(jobId);
+
+    // 5. Poll until complete (max ~90 seconds)
+    let jobState = '';
+    const terminal = ['Completed', 'PartiallyCompleted', 'Failed'];
+    for (let i = 0; i < 30; i++) {
+      await new Promise((r) => setTimeout(r, 3000));
+      const status = await client.documentIntelligence.getStatus(jobId);
+      jobState = (status as unknown as { job_state: string }).job_state ?? '';
+      if (terminal.includes(jobState)) break;
+    }
+    if (!['Completed', 'PartiallyCompleted'].includes(jobState)) {
+      return { rawSummary: null, parsedData: null };
+    }
+
+    // 6. Download result ZIP
+    const downloadResponse = await client.documentIntelligence.getDownloadLinks(jobId);
+    const downloadUrls = (downloadResponse as unknown as {
+      download_urls: Record<string, { file_url: string }>;
+    }).download_urls ?? {};
+    const downloadInfo = Object.values(downloadUrls)[0];
+    if (!downloadInfo?.file_url) return { rawSummary: null, parsedData: null };
+
+    const dlRes = await fetch(downloadInfo.file_url);
+    if (!dlRes.ok) return { rawSummary: null, parsedData: null };
+    const resultBuffer = Buffer.from(await dlRes.arrayBuffer());
+
+    // 7. Extract markdown from result ZIP
+    const resultZip = await JSZip.loadAsync(resultBuffer);
+    const mdFiles = Object.keys(resultZip.files).filter(
+      (f) => f.endsWith('.md') && !resultZip.files[f]?.dir
+    );
+    if (mdFiles.length === 0) return { rawSummary: null, parsedData: null };
+
+    const markdownText = await resultZip.files[mdFiles[0]]!.async('string');
+    if (!markdownText.trim()) return { rawSummary: null, parsedData: null };
+
+    // 8. Structure with Sarvam chat
+    return structureWithSarvam(markdownText);
   } catch {
     return { rawSummary: null, parsedData: null };
   }
@@ -165,7 +188,6 @@ export async function parseReport(
     if (mimeType.startsWith('image/')) return await parseImage(buffer, mimeType);
     return { rawSummary: null, parsedData: null };
   } catch {
-    // Never let parsing failure block the upload
     return { rawSummary: null, parsedData: null };
   }
 }
