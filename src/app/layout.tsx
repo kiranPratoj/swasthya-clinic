@@ -28,14 +28,17 @@ export default async function RootLayout({ children }: { children: React.ReactNo
               {!isClinicScopedPage && (
                 <>
                 <nav className="bda-nav bda-nav--desktop">
-                  <Link href="/#product" className="bda-nav-link bda-nav-link--ghost">
-                    Product
+                  <Link href="/#wa-intake" className="bda-nav-link bda-nav-link--ghost">
+                    WhatsApp Intake
                   </Link>
-                  <Link href="/#workflow" className="bda-nav-link bda-nav-link--ghost">
-                    Workflow
+                  <Link href="/#live-queue" className="bda-nav-link bda-nav-link--ghost">
+                    Live Queue
                   </Link>
-                  <Link href="/#sarvam" className="bda-nav-link bda-nav-link--ghost">
-                    AI Support
+                  <Link href="/#ai-scribe" className="bda-nav-link bda-nav-link--ghost">
+                    AI Scribe
+                  </Link>
+                  <Link href="/#discharge" className="bda-nav-link bda-nav-link--ghost">
+                    Discharge
                   </Link>
                   <NavDemoButton />
                 </nav>
@@ -43,14 +46,17 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                   <details className="bda-mobile-menu">
                     <summary className="bda-mobile-menu-trigger">Menu</summary>
                     <div className="bda-mobile-menu-panel">
-                      <Link href="/#product" className="bda-mobile-menu-link">
-                        Product
+                      <Link href="/#wa-intake" className="bda-mobile-menu-link">
+                        WhatsApp Intake
                       </Link>
-                      <Link href="/#workflow" className="bda-mobile-menu-link">
-                        Workflow
+                      <Link href="/#live-queue" className="bda-mobile-menu-link">
+                        Live Queue
                       </Link>
-                      <Link href="/#sarvam" className="bda-mobile-menu-link">
-                        AI Support
+                      <Link href="/#ai-scribe" className="bda-mobile-menu-link">
+                        AI Scribe
+                      </Link>
+                      <Link href="/#discharge" className="bda-mobile-menu-link">
+                        Discharge
                       </Link>
                     </div>
                   </details>

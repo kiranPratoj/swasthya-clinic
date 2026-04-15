@@ -1184,7 +1184,7 @@ export default function PatientIntakeForm({
                 </div>
               </div>
               <input type="hidden" name="payment_mode" value={paymentMode} />
-              <input type="hidden" name="payment_status" value={paymentStatus} />
+              <input type="hidden" name="payment_state" value={paymentStatus} />
             </div>
 
             {submitError && (

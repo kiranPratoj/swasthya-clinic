@@ -480,11 +480,14 @@ export default function QueueDisplay({
                     )}
 
                     <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-                      {item.status !== 'completed' && (
+                      {(item.status !== 'completed' || role === 'receptionist' || role === 'admin') && (
                         <AppointmentActionsMenu
                           appointmentId={item.id}
                           currentStatus={item.status}
+                          paymentMode={item.payment_mode}
+                          paymentStatus={item.payment_status}
                           patientName={item.patient.name}
+                          role={role}
                         />
                       )}
                     </div>
