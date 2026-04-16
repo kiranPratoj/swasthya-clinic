@@ -17,8 +17,11 @@ const EXTRACT_TOOL_PARAMS = {
   parameters: {
     type: 'object' as const,
     properties: {
-      lab_name: { type: 'string', description: 'Name of the lab or hospital' },
-      report_date: { type: 'string', description: 'Date of the report (YYYY-MM-DD)' },
+      lab_name: { type: 'string', description: 'Name of the lab or diagnostic centre (e.g. TruScan Diagnostics). Do not use barcodes or ID numbers.' },
+      report_date: { type: 'string', description: 'Reporting or result date (YYYY-MM-DD)' },
+      collection_date: { type: 'string', description: 'Sample collection date (YYYY-MM-DD)' },
+      referral: { type: 'string', description: 'Referring doctor or referral source' },
+      sample_type: { type: 'string', description: 'Sample type e.g. EDTA, Serum, Urine' },
       tests: {
         type: 'array',
         items: {
@@ -45,9 +48,9 @@ function extractRelevantSection(text: string): string {
   // The test data is often in an HTML <table> element
   const tableMatch = stripped.match(/<table[\s\S]*?<\/table>/i);
   if (tableMatch) {
-    // Include 500 chars before the table for context (lab name, date, etc.)
+    // Include up to 1500 chars before the table for header context (lab name, collection date, referral, sample type)
     const tableIdx = stripped.indexOf(tableMatch[0]);
-    const start = Math.max(0, tableIdx - 500);
+    const start = Math.max(0, tableIdx - 1500);
     return stripped.slice(start, tableIdx + tableMatch[0].length + 500);
   }
 
@@ -176,12 +179,14 @@ async function parseViaSarvamDocIntelligence(
 function buildSummary(data: ParsedReportData): string {
   const parts: string[] = [];
   if (data.lab_name) parts.push(data.lab_name);
-  if (data.report_date) parts.push(`Date: ${data.report_date}`);
+  const date = data.collection_date ?? data.report_date;
+  if (date) parts.push(`Date: ${date}`);
+  if (data.referral) parts.push(`Ref: ${data.referral}`);
   if (data.tests && data.tests.length > 0) {
     const abnormal = data.tests.filter(t => t.flag === 'high' || t.flag === 'low');
     if (abnormal.length > 0) {
       parts.push(
-        `Abnormal: ${abnormal.map(t => `${t.name} ${t.value}${t.unit} (${t.flag})`).join(', ')}`
+        `Abnormal: ${abnormal.map(t => `${t.name} ${t.value}${t.unit ? ' ' + t.unit : ''} (${t.flag})`).join(', ')}`
       );
     }
     parts.push(`${data.tests.length} test${data.tests.length !== 1 ? 's' : ''} recorded`);

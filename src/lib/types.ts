@@ -295,6 +295,9 @@ export type ParsedTest = {
 export type ParsedReportData = {
   lab_name?: string;
   report_date?: string;
+  collection_date?: string;
+  referral?: string;
+  sample_type?: string;
   tests?: ParsedTest[];
 };
 

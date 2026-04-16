@@ -68,10 +68,19 @@ export default function ReportCard({ report }: { report: PatientReport }) {
             {report.parsed_data?.lab_name && (
               <span>{report.parsed_data.lab_name} · </span>
             )}
-            {report.parsed_data?.report_date
-              ? report.parsed_data.report_date
-              : formatDate(report.created_at)}
+            {report.parsed_data?.collection_date
+              ? `Collected: ${report.parsed_data.collection_date}`
+              : report.parsed_data?.report_date
+                ? report.parsed_data.report_date
+                : formatDate(report.created_at)}
           </div>
+          {(report.parsed_data?.referral || report.parsed_data?.sample_type) && (
+            <div style={{ marginTop: '0.2rem', fontSize: '0.78rem', color: 'var(--color-text-muted)' }}>
+              {report.parsed_data.sample_type && <span>Sample: {report.parsed_data.sample_type}</span>}
+              {report.parsed_data.sample_type && report.parsed_data.referral && <span> · </span>}
+              {report.parsed_data.referral && <span>Ref: {report.parsed_data.referral}</span>}
+            </div>
+          )}
           {report.raw_summary && (
             <p style={{ margin: '0.35rem 0 0', fontSize: '0.82rem', color: 'var(--color-text)', lineHeight: 1.4 }}>
               {report.raw_summary}
