@@ -977,7 +977,9 @@ export async function getPatientHistory(phone: string): Promise<Appointment[]> {
     .limit(10);
 
   if (error) throw new Error(error.message);
-  return data ?? [];
+
+  const withPaymentFallback = await applyPaymentAuditFallback(db, clinicId, (data ?? []) as Appointment[]);
+  return attachBillSummaries(db, clinicId, withPaymentFallback);
 }
 
 export async function getPatientHistoryById(patientId: string): Promise<Appointment[]> {
@@ -992,7 +994,9 @@ export async function getPatientHistoryById(patientId: string): Promise<Appointm
     .limit(10);
 
   if (error) throw new Error(error.message);
-  return data ?? [];
+
+  const withPaymentFallback = await applyPaymentAuditFallback(db, clinicId, (data ?? []) as Appointment[]);
+  return attachBillSummaries(db, clinicId, withPaymentFallback);
 }
 
 export async function searchPatientsByPhone(

@@ -179,9 +179,24 @@ async function validateFinalAudio(
  * Used by patientExtractionAdapter for final processing.
  */
 export async function transcribeAudio(formData: FormData): Promise<string> {
+  const { transcript } = await transcribeAudioWithMetadata(formData);
+  return transcript;
+}
+
+export async function transcribeAudioWithMetadata(formData: FormData): Promise<{
+  transcript: string;
+  languageCode: string | null;
+  languageProbability: number | null;
+}> {
   const audioFile = formData.get('audio') as File | null;
   const sarvamKey = process.env.SARVAM_API_KEY;
-  if (!audioFile || !sarvamKey) return '';
+  if (!audioFile || !sarvamKey) {
+    return {
+      transcript: '',
+      languageCode: null,
+      languageProbability: null,
+    };
+  }
 
   const clientDurationMsValue = formData.get('durationMs');
   const clientDurationMs = typeof clientDurationMsValue === 'string' ? Number(clientDurationMsValue) : null;
@@ -200,7 +215,12 @@ export async function transcribeAudio(formData: FormData): Promise<string> {
       mode: 'transcribe',
     });
 
-    return response.transcript?.trim() ?? '';
+    return {
+      transcript: response.transcript?.trim() ?? '',
+      languageCode: response.language_code ?? null,
+      languageProbability:
+        typeof response.language_probability === 'number' ? response.language_probability : null,
+    };
   } finally {
     if (fs.existsSync(tempFilePath)) {
       fs.unlinkSync(tempFilePath);

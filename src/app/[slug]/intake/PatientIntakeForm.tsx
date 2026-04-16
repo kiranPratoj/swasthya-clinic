@@ -827,12 +827,12 @@ export default function PatientIntakeForm({
                   fontWeight: 600,
                 }}
               >
-                {isRecording ? 'Recording live preview...' : 'Kannada or English speech supported.'}
+                {isRecording ? 'Recording live preview...' : 'V1 voice intake supports Kannada or English only.'}
               </span>
 
               {!isRecording && !isProcessingVoice && !voiceDraft && (
                 <p className="intake-hint-text">
-                  Say: patient name, age, phone number, and symptoms.
+                  Say: patient name, age, phone number, and symptoms. For short names or initials, speak slowly and confirm the spelling before saving.
                 </p>
               )}
 

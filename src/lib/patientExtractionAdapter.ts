@@ -12,13 +12,14 @@ function normalizePatientName(value: unknown): string | null {
   if (!raw) return null;
 
   const cleaned = raw
+    .replace(/\./g, ' ')
     .replace(/\s+/g, ' ')
     .replace(/[,:;]+$/g, '')
     .trim();
 
   if (!cleaned) return null;
   if (/[0-9]/.test(cleaned)) return null;
-  if (/[?!.।,\n]/.test(cleaned)) return null;
+  if (/[?!।,\n]/.test(cleaned)) return null;
 
   const lowered = cleaned.toLowerCase();
   if (
@@ -295,10 +296,27 @@ Only call the function. Do not answer in plain text.`,
 }
 
 export async function processPatientVoiceInput(fd: FormData): Promise<VoiceDraft> {
-  const { transcribeAudio } = await import('./voiceAdapter');
+  const { transcribeAudioWithMetadata } = await import('./voiceAdapter');
+  const supportedLanguageCodes = new Set(['kn-IN', 'en-IN']);
 
   try {
-    const transcript = await transcribeAudio(fd);
+    const { transcript, languageCode } = await transcribeAudioWithMetadata(fd);
+
+    if (languageCode && !supportedLanguageCodes.has(languageCode)) {
+      return {
+        id: 'temp',
+        transcript: '',
+        structuredData: {
+          patientName: null, age: null, phone: null,
+          complaint: null, visitType: null,
+          summary: '',
+          missingFields: ['Patient Name', 'Phone', 'Complaint', 'Visit Type'],
+        },
+        isFallback: true,
+        status: 'failed',
+        errorMsg: 'Voice intake currently supports Kannada or English only. Please switch to manual entry for other languages.',
+      };
+    }
 
     if (!transcript || transcript.trim().length === 0) {
       return {

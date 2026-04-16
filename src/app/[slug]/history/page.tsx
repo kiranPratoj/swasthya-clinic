@@ -2,6 +2,42 @@ import { getPatientHistory } from '@/app/actions';
 import type { Appointment } from '@/lib/types';
 import { verifyRole } from '@/lib/auth';
 
+function getPaymentBadge(appointment: Appointment): {
+  label: 'Paid' | 'Pending';
+  background: string;
+  color: string;
+} {
+  if (appointment.bill_summary) {
+    if (appointment.bill_summary.status === 'paid') {
+      return {
+        label: 'Paid',
+        background: 'var(--color-success-bg)',
+        color: 'var(--color-success)',
+      };
+    }
+
+    return {
+      label: 'Pending',
+      background: 'var(--color-warning-bg)',
+      color: 'var(--color-warning)',
+    };
+  }
+
+  if (appointment.payment_status === 'verified') {
+    return {
+      label: 'Paid',
+      background: 'var(--color-success-bg)',
+      color: 'var(--color-success)',
+    };
+  }
+
+  return {
+    label: 'Pending',
+    background: 'var(--color-warning-bg)',
+    color: 'var(--color-warning)',
+  };
+}
+
 export default async function HistoryPage({
   params,
   searchParams,
@@ -87,8 +123,11 @@ export default async function HistoryPage({
             {/* Timeline Line */}
             <div style={{ position: 'absolute', left: '20px', top: '0', bottom: '0', width: '2px', background: 'var(--color-border)', zIndex: 0 }}></div>
             
-            {appointments.map((appt) => (
-              <div key={appt.id} style={{ display: 'flex', gap: '1.5rem', position: 'relative', zIndex: 1 }}>
+            {appointments.map((appt) => {
+              const paymentBadge = getPaymentBadge(appt);
+
+              return (
+                <div key={appt.id} style={{ display: 'flex', gap: '1.5rem', position: 'relative', zIndex: 1 }}>
                 <div style={{ width: '42px', height: '42px', borderRadius: '50%', background: 'white', border: '2px solid var(--color-primary)', display: 'grid', placeItems: 'center', flexShrink: 0 }}>
                   <div style={{ width: '10px', height: '10px', borderRadius: '50%', background: 'var(--color-primary)' }}></div>
                 </div>
@@ -99,10 +138,23 @@ export default async function HistoryPage({
                       <div style={{ fontSize: '0.875rem', fontWeight: 700, color: 'var(--color-text-muted)', marginBottom: '0.25rem' }}>
                         {new Date(appt.booked_for).toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
                       </div>
-                      <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                      <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
                         <span style={{ fontWeight: 800, color: 'var(--color-text)' }}>Token #{appt.token_number}</span>
                         <span style={{ fontSize: '0.75rem', padding: '0.2rem 0.5rem', borderRadius: '4px', background: 'var(--color-primary-soft)', color: 'var(--color-primary)', fontWeight: 700, textTransform: 'uppercase' }}>
                           {appt.visit_type}
+                        </span>
+                        <span
+                          style={{
+                            fontSize: '0.75rem',
+                            padding: '0.2rem 0.5rem',
+                            borderRadius: '4px',
+                            background: paymentBadge.background,
+                            color: paymentBadge.color,
+                            fontWeight: 700,
+                            textTransform: 'uppercase',
+                          }}
+                        >
+                          {paymentBadge.label}
                         </span>
                       </div>
                     </div>
@@ -130,7 +182,8 @@ export default async function HistoryPage({
                   </div>
                 </div>
               </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}
