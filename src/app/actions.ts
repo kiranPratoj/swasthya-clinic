@@ -2082,7 +2082,7 @@ export async function getPatientReports(patientId: string): Promise<PatientRepor
     data.map(async (row) => {
       const { data: urlData } = await storageDb.storage
         .from('clinic-reports')
-        .createSignedUrl(row.file_path as string, 3600);
+        .createSignedUrl(row.file_path as string, 86400); // 24h — covers a full clinic day
 
       return {
         ...row,

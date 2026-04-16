@@ -4,6 +4,9 @@ import { getDb, getClinicDb } from '@/lib/db';
 import { parseReport } from '@/lib/reportParsingAdapter';
 import type { ReportType } from '@/lib/types';
 
+// OCR polling takes up to 90s — extend function timeout beyond Next.js 30s default
+export const maxDuration = 300;
+
 const MAX_BYTES = 10 * 1024 * 1024; // 10 MB
 const ALLOWED_MIME_TYPES = new Set([
   'application/pdf',
@@ -39,14 +42,14 @@ export async function POST(request: NextRequest) {
   const reportType = (formData.get('reportType') as string | null) ?? 'other';
   const appointmentId = (formData.get('appointmentId') as string | null) || null;
 
-  if (!file) return NextResponse.json({ error: 'No file provided.' }, { status: 400 });
-  if (!patientId) return NextResponse.json({ error: 'patientId is required.' }, { status: 400 });
+  if (!file) return NextResponse.json({ error: 'No file selected.' }, { status: 400 });
+  if (!patientId) return NextResponse.json({ error: 'Patient ID missing.' }, { status: 400 });
   if (file.size > MAX_BYTES) {
-    return NextResponse.json({ error: 'File exceeds 10 MB limit.' }, { status: 413 });
+    return NextResponse.json({ error: 'File is too large. Please use a file under 10 MB.' }, { status: 413 });
   }
   if (!ALLOWED_MIME_TYPES.has(file.type)) {
     return NextResponse.json(
-      { error: 'Only PDF, JPEG, PNG, and WebP files are accepted.' },
+      { error: 'Unsupported file type. Please upload a PDF or photo (JPEG, PNG).' },
       { status: 415 }
     );
   }
@@ -72,7 +75,7 @@ export async function POST(request: NextRequest) {
 
   if (uploadError) {
     console.error('[upload-report] storage upload error:', uploadError.message);
-    return NextResponse.json({ error: 'File storage failed.' }, { status: 500 });
+    return NextResponse.json({ error: 'Upload failed. Please check your connection and try again.' }, { status: 500 });
   }
 
   // 2. Parse content with AI (never blocks — returns nulls on failure)
@@ -99,8 +102,9 @@ export async function POST(request: NextRequest) {
 
   if (insertError) {
     console.error('[upload-report] db insert error:', insertError.message);
-    // File is stored — log but still return partial success
-    return NextResponse.json({ error: 'File uploaded but record save failed.' }, { status: 500 });
+    // Clean up orphaned file so storage quota isn't wasted
+    await db.storage.from('clinic-reports').remove([storagePath]);
+    return NextResponse.json({ error: 'Could not save the report. Please try again.' }, { status: 500 });
   }
 
   return NextResponse.json({

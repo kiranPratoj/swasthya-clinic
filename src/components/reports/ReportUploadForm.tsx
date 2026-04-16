@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import type { ReportType, ParsedReportData } from '@/lib/types';
 
@@ -29,6 +29,18 @@ export default function ReportUploadForm({ patientId, appointmentId }: Props) {
   const [errorMsg, setErrorMsg] = useState('');
   const [parsedSummary, setParsedSummary] = useState<string | null>(null);
   const [parsedData, setParsedData] = useState<ParsedReportData | null>(null);
+  const [elapsed, setElapsed] = useState(0);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => {
+    if (state === 'uploading') {
+      setElapsed(0);
+      timerRef.current = setInterval(() => setElapsed(s => s + 1), 1000);
+    } else {
+      if (timerRef.current) clearInterval(timerRef.current);
+    }
+    return () => { if (timerRef.current) clearInterval(timerRef.current); };
+  }, [state]);
 
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0] ?? null;
@@ -158,24 +170,31 @@ export default function ReportUploadForm({ patientId, appointmentId }: Props) {
 
       {/* Actions */}
       {state !== 'done' && (
-        <button
-          type="button"
-          onClick={handleUpload}
-          disabled={!selectedFile || isLoading}
-          style={{
-            padding: '0.75rem',
-            background: !selectedFile || isLoading ? 'var(--color-bg-soft)' : 'var(--color-primary)',
-            color: !selectedFile || isLoading ? 'var(--color-text-muted)' : 'white',
-            border: !selectedFile || isLoading ? '1px solid var(--color-border)' : 'none',
-            borderRadius: 'var(--radius-md)',
-            fontWeight: 700,
-            fontSize: '0.9rem',
-            cursor: !selectedFile || isLoading ? 'not-allowed' : 'pointer',
-            opacity: !selectedFile || isLoading ? 1 : undefined,
-          }}
-        >
-          {isLoading ? '⏳ Uploading & Parsing…' : '⬆ Upload & Parse'}
-        </button>
+        <>
+          <button
+            type="button"
+            onClick={handleUpload}
+            disabled={!selectedFile || isLoading}
+            style={{
+              padding: '0.75rem',
+              background: !selectedFile || isLoading ? 'var(--color-bg-soft)' : 'var(--color-primary)',
+              color: !selectedFile || isLoading ? 'var(--color-text-muted)' : 'white',
+              border: !selectedFile || isLoading ? '1px solid var(--color-border)' : 'none',
+              borderRadius: 'var(--radius-md)',
+              fontWeight: 700,
+              fontSize: '0.9rem',
+              cursor: !selectedFile || isLoading ? 'not-allowed' : 'pointer',
+              opacity: !selectedFile || isLoading ? 1 : undefined,
+            }}
+          >
+            {isLoading ? `⏳ Reading report… (${elapsed}s)` : '⬆ Upload & Parse'}
+          </button>
+          {isLoading && elapsed >= 5 && (
+            <p style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', textAlign: 'center', margin: '0.25rem 0 0' }}>
+              {elapsed < 20 ? 'AI is extracting test values from the report…' : 'Almost done — large reports take a moment…'}
+            </p>
+          )}
+        </>
       )}
 
       {/* Error */}
