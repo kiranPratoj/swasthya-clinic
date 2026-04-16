@@ -4,6 +4,7 @@ import Link from 'next/link';
 import type { Clinic, Doctor } from '@/lib/types';
 import StaffBottomNav from '@/components/StaffBottomNav';
 import { getSessionOrNull } from '@/lib/auth';
+import StaffMoreMenu from '@/components/StaffMoreMenu';
 
 function normalizeDoctorName(name: string): string {
   return name.replace(/^dr\.?\s*/i, '').trim();
@@ -103,97 +104,7 @@ export default async function SlugLayout({
                   </Link>
                 ))}
               </nav>
-              <details style={{ position: 'relative' }}>
-                <summary
-                  style={{
-                    listStyle: 'none',
-                    cursor: 'pointer',
-                    fontSize: '0.79rem',
-                    fontWeight: 700,
-                    color: 'var(--color-text-muted)',
-                    whiteSpace: 'nowrap',
-                  }}
-                >
-                  More
-                </summary>
-                <div
-                  style={{
-                    position: 'absolute',
-                    top: 'calc(100% + 0.55rem)',
-                    left: 0,
-                    minWidth: '11rem',
-                    background: 'white',
-                    border: '1px solid var(--color-border)',
-                    borderRadius: 'var(--radius-lg)',
-                    boxShadow: 'var(--shadow-md)',
-                    padding: '0.45rem',
-                    display: 'grid',
-                    gap: '0.2rem',
-                    zIndex: 10,
-                  }}
-                >
-                  {moreNavItems.length > 0 ? (
-                    <>
-                      {moreNavItems.map(({ href, label }) => (
-                        <Link
-                          key={href}
-                          href={href}
-                          style={{
-                            fontSize: '0.82rem',
-                            fontWeight: 700,
-                            color: 'var(--color-text)',
-                            textDecoration: 'none',
-                            padding: '0.6rem 0.75rem',
-                            borderRadius: 'var(--radius-md)',
-                            whiteSpace: 'nowrap',
-                          }}
-                        >
-                          {label}
-                        </Link>
-                      ))}
-                      <form action="/api/auth/logout" method="POST">
-                        <button
-                          type="submit"
-                          style={{
-                            width: '100%',
-                            fontSize: '0.82rem',
-                            fontWeight: 700,
-                            color: 'var(--color-error)',
-                            background: 'rgba(237, 28, 36, 0.06)',
-                            border: '1px solid rgba(237, 28, 36, 0.16)',
-                            borderRadius: 'var(--radius-md)',
-                            padding: '0.6rem 0.75rem',
-                            cursor: 'pointer',
-                            textAlign: 'left',
-                          }}
-                        >
-                          Sign out
-                        </button>
-                      </form>
-                    </>
-                  ) : (
-                    <form action="/api/auth/logout" method="POST">
-                      <button
-                        type="submit"
-                        style={{
-                          width: '100%',
-                          fontSize: '0.82rem',
-                          fontWeight: 700,
-                          color: 'var(--color-error)',
-                          background: 'rgba(237, 28, 36, 0.06)',
-                          border: '1px solid rgba(237, 28, 36, 0.16)',
-                          borderRadius: 'var(--radius-md)',
-                          padding: '0.6rem 0.75rem',
-                          cursor: 'pointer',
-                          textAlign: 'left',
-                        }}
-                      >
-                        Sign out
-                      </button>
-                    </form>
-                  )}
-                </div>
-              </details>
+              <StaffMoreMenu items={moreNavItems} />
             </div>
           </div>
         </div>

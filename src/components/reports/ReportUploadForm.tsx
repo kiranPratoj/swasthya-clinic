@@ -89,16 +89,17 @@ export default function ReportUploadForm({ patientId, appointmentId }: Props) {
 
   return (
     <div style={{
-      background: 'var(--color-primary-soft)',
-      border: '1px dashed var(--color-primary-outline)',
+      background: 'white',
+      border: '1px solid var(--color-primary-outline)',
       borderRadius: 'var(--radius-lg)',
       padding: '1.25rem',
       display: 'grid',
       gap: '1rem',
+      boxShadow: 'var(--shadow-sm)',
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
         <span style={{ fontSize: '1rem' }}>📎</span>
-        <strong style={{ fontSize: '0.92rem', color: 'var(--color-primary)' }}>Upload Report</strong>
+        <strong style={{ fontSize: '0.92rem', color: 'var(--color-text)' }}>Upload Report</strong>
       </div>
 
       {/* Report type */}
@@ -110,7 +111,15 @@ export default function ReportUploadForm({ patientId, appointmentId }: Props) {
           value={reportType}
           onChange={e => setReportType(e.target.value as ReportType)}
           disabled={isLoading}
-          style={{ width: '100%', padding: '0.55rem 0.75rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', fontSize: '0.88rem', background: 'white' }}
+          style={{
+            width: '100%',
+            padding: '0.55rem 0.75rem',
+            borderRadius: 'var(--radius-md)',
+            border: '1px solid var(--color-border)',
+            fontSize: '0.88rem',
+            background: 'white',
+            color: 'var(--color-text)',
+          }}
         >
           {(Object.entries(REPORT_TYPE_LABELS) as [ReportType, string][]).map(([val, label]) => (
             <option key={val} value={val}>{label}</option>
@@ -130,7 +139,15 @@ export default function ReportUploadForm({ patientId, appointmentId }: Props) {
           capture="environment"
           onChange={handleFileChange}
           disabled={isLoading}
-          style={{ fontSize: '0.85rem', width: '100%' }}
+          style={{
+            fontSize: '0.85rem',
+            width: '100%',
+            padding: '0.55rem 0.75rem',
+            borderRadius: 'var(--radius-md)',
+            border: '1px solid var(--color-border)',
+            background: 'white',
+            color: 'var(--color-text)',
+          }}
         />
         {selectedFile && (
           <p style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', marginTop: '0.3rem' }}>
@@ -147,13 +164,14 @@ export default function ReportUploadForm({ patientId, appointmentId }: Props) {
           disabled={!selectedFile || isLoading}
           style={{
             padding: '0.75rem',
-            background: !selectedFile || isLoading ? 'var(--color-border)' : 'var(--color-primary)',
-            color: 'white',
-            border: 'none',
+            background: !selectedFile || isLoading ? 'var(--color-bg-soft)' : 'var(--color-primary)',
+            color: !selectedFile || isLoading ? 'var(--color-text-muted)' : 'white',
+            border: !selectedFile || isLoading ? '1px solid var(--color-border)' : 'none',
             borderRadius: 'var(--radius-md)',
             fontWeight: 700,
             fontSize: '0.9rem',
             cursor: !selectedFile || isLoading ? 'not-allowed' : 'pointer',
+            opacity: !selectedFile || isLoading ? 1 : undefined,
           }}
         >
           {isLoading ? '⏳ Uploading & Parsing…' : '⬆ Upload & Parse'}
