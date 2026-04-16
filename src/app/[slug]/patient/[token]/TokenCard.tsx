@@ -28,7 +28,7 @@ export default async function TokenCard({
       .lt('token_number', appointment.token_number),
   ]);
 
-  const clinicName = typeof clinic?.name === 'string' ? clinic.name : 'Sarvam Clinic';
+  const clinicName = typeof clinic?.name === 'string' ? clinic.name : 'Medilite AI';
   const patientsAhead = count ?? 0;
   const printButtonId = `print-token-${appointment.id}`;
   const printScript = `

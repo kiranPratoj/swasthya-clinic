@@ -107,7 +107,7 @@ export default function WhatsAppSimulator() {
           <MessageCircle size={20} color="white" />
         </div>
         <div>
-          <div style={{ color: '#fff', fontWeight: 700, fontSize: '0.9rem' }}>Medilite Clinic</div>
+          <div style={{ color: '#fff', fontWeight: 700, fontSize: '0.9rem' }}>Medilite AI</div>
           <div style={{ color: 'rgba(255,255,255,0.7)', fontSize: '0.72rem' }}>
             {state === 'processing' ? 'typing…' : 'online'}
           </div>

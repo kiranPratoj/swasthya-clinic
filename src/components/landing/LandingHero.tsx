@@ -153,7 +153,7 @@ export default function LandingHero() {
               }}
             >
               <DemoTrigger>
-                <button className="lp-btn lp-btn--primary">Book a Demo</button>
+                <button className="lp-btn lp-btn--primary">Book Demo</button>
               </DemoTrigger>
               <Link href="/onboard" className="lp-btn lp-btn--secondary">
                 Start Free Trial
@@ -530,7 +530,7 @@ export default function LandingHero() {
             className="lp-btn lp-btn--primary"
             style={{ width: '100%', maxWidth: '28rem' }}
           >
-            Book a Demo
+            Book Demo
           </button>
         </DemoTrigger>
       </div>

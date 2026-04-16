@@ -22,7 +22,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           <div className="max-w-7xl px-4 bda-header-shell">
             <div className="bda-header-main">
               <Link href="/" className="bda-brand">
-                <BrandLockup markSize={50} titleSize="sm" className="bda-brand-lockup" />
+                <BrandLockup markSize={40} titleSize="sm" />
               </Link>
 
               {!isClinicScopedPage && (

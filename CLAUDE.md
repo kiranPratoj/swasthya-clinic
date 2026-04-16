@@ -98,9 +98,10 @@ NEXT_PUBLIC_SUPABASE_URL    # Supabase project URL
 NEXT_PUBLIC_SUPABASE_ANON_KEY
 SUPABASE_SERVICE_ROLE_KEY
 SESSION_SECRET              # HMAC signing key for staff sessions
-WHATSAPP_TOKEN              # Meta Graph API token (optional)
-WHATSAPP_PHONE_NUMBER_ID    # (optional)
-APP_URL                     # e.g. https://swasthya.vercel.app (for portal links)
+WHATSAPP_TOKEN              # Meta Graph API token (required for patient OTP + notifications)
+WHATSAPP_PHONE_NUMBER_ID    # WhatsApp Business sender phone ID
+WHATSAPP_BUSINESS_ACCOUNT_ID
+APP_URL                     # e.g. https://medilite-ai.com (used in portal links)
 ```
 
 ## Do NOT
