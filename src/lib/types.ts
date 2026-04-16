@@ -217,6 +217,23 @@ export type SessionPayload = {
   exp: number;
 };
 
+export type PatientSessionPayload = {
+  kind: 'patient';
+  clinicId: string;
+  slug: string;
+  phone: string;
+  selectedPatientId: string | null;
+  exp: number;
+};
+
+export type PatientPortalProfile = {
+  id: string;
+  name: string;
+  age: number | null;
+  phone: string | null;
+  lastVisit: string | null;
+};
+
 // ─── Voice / AI intake types ──────────────────────────────────────────────────
 
 export type PatientIntakeDraft = {

@@ -58,6 +58,8 @@ export async function proxy(request: NextRequest) {
 
   const subdomainSlug = getSlugFromHost(host);
   const slug = subdomainSlug ?? getSlugFromPathname(pathname);
+  let resolvedSlug: string | null = subdomainSlug;
+  let resolvedViaCustomDomain = false;
 
   if (!slug) return NextResponse.next();
 
@@ -72,11 +74,14 @@ export async function proxy(request: NextRequest) {
   const { data } = await supabase
     .from('clinics').select('id').eq('slug', slug).single();
   clinicId = data?.id ?? null;
+  resolvedSlug = clinicId ? slug : resolvedSlug;
 
   if (!clinicId && !subdomainSlug && !isLocalhost) {
     const { data: domainData } = await supabase
-      .from('clinics').select('id').eq('custom_domain', host.split(':')[0]).single();
+      .from('clinics').select('id, slug').eq('custom_domain', host.split(':')[0]).single();
     clinicId = domainData?.id ?? null;
+    resolvedSlug = (domainData?.slug as string | undefined) ?? resolvedSlug;
+    resolvedViaCustomDomain = Boolean(domainData?.id);
   }
 
   if (!clinicId) {
@@ -88,6 +93,11 @@ export async function proxy(request: NextRequest) {
 
   // ── Auth check for protected clinic routes ────────────────────────────────
   const isPublicSlug = isPublicSlugPath(pathname);
+  const rewrittenPathname =
+    resolvedViaCustomDomain && resolvedSlug && !pathname.startsWith(`/${resolvedSlug}/`)
+      ? `/${resolvedSlug}${pathname}`
+      : pathname;
+  const shouldRewrite = rewrittenPathname !== pathname;
 
   if (!isPublicSlug) {
     const sessionCookie = request.cookies.get(COOKIE_NAME)?.value;
@@ -105,28 +115,42 @@ export async function proxy(request: NextRequest) {
     }
 
     const requestHeaders = new Headers(request.headers);
+    requestHeaders.set('x-request-pathname', rewrittenPathname);
     requestHeaders.set('x-clinic-id', clinicId);
     requestHeaders.set('x-user-id', session.userId);
     requestHeaders.set('x-user-role', session.role);
 
-    return NextResponse.next({
-      request: {
-        headers: requestHeaders,
-      },
-    });
+    if (shouldRewrite) {
+      const rewriteUrl = request.nextUrl.clone();
+      rewriteUrl.pathname = rewrittenPathname;
+      return NextResponse.rewrite(rewriteUrl, {
+        request: {
+          headers: requestHeaders,
+        },
+      });
+    }
+
+    return NextResponse.next({ request: { headers: requestHeaders } });
   }
 
   // Public slug route (e.g. /book) — inject clinic but no auth needed
   const requestHeaders = new Headers(request.headers);
   requestHeaders.delete('x-user-id');
   requestHeaders.delete('x-user-role');
+  requestHeaders.set('x-request-pathname', rewrittenPathname);
   requestHeaders.set('x-clinic-id', clinicId);
 
-  return NextResponse.next({
-    request: {
-      headers: requestHeaders,
-    },
-  });
+  if (shouldRewrite) {
+    const rewriteUrl = request.nextUrl.clone();
+    rewriteUrl.pathname = rewrittenPathname;
+    return NextResponse.rewrite(rewriteUrl, {
+      request: {
+        headers: requestHeaders,
+      },
+    });
+  }
+
+  return NextResponse.next({ request: { headers: requestHeaders } });
 }
 
 export const config = {

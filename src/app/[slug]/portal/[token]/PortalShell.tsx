@@ -1,17 +1,21 @@
 'use client';
 
 import { useState } from 'react';
+import { usePathname } from 'next/navigation';
 import ReportCard from '@/components/reports/ReportCard';
 import type { Appointment, Patient, PatientReport, VisitHistory } from '@/lib/types';
+import { getPatientPortalBasePath } from '@/lib/patientPortalPath';
 import PortalHistoryCard from './PortalHistoryCard';
 
 type TabId = 'appointments' | 'history' | 'reports';
 
 type Props = {
+  slug: string;
   patient: Patient;
   upcomingAppointments: Appointment[];
   visitHistory: VisitHistory[];
   reports: PatientReport[];
+  canSwitchProfiles?: boolean;
 };
 
 function formatDate(value: string): string {
@@ -45,11 +49,15 @@ const TABS: Array<{ id: TabId; label: string }> = [
 ];
 
 export default function PortalShell({
+  slug,
   patient,
   upcomingAppointments,
   visitHistory,
   reports,
+  canSwitchProfiles = false,
 }: Props) {
+  const pathname = usePathname();
+  const portalBasePath = getPatientPortalBasePath(pathname, slug);
   const [activeTab, setActiveTab] = useState<TabId>('appointments');
 
   return (
@@ -81,6 +89,40 @@ export default function PortalShell({
           {patient.phone && (
             <p style={{ fontSize: '0.88rem', color: 'var(--color-text-muted)', margin: 0 }}>{patient.phone}</p>
           )}
+          <div style={{ display: 'flex', gap: '0.6rem', flexWrap: 'wrap', marginTop: '0.4rem' }}>
+            {canSwitchProfiles && (
+              <a
+                href={`${portalBasePath}?switch=1`}
+                style={{
+                  fontSize: '0.8rem',
+                  fontWeight: 800,
+                  color: 'var(--color-primary)',
+                  textDecoration: 'none',
+                }}
+              >
+                Switch profile
+              </a>
+            )}
+            <form
+              action={`/api/patient-auth/logout?next=${encodeURIComponent(`${portalBasePath}/login`)}`}
+              method="POST"
+            >
+              <button
+                type="submit"
+                style={{
+                  border: 'none',
+                  background: 'transparent',
+                  padding: 0,
+                  fontSize: '0.8rem',
+                  fontWeight: 800,
+                  color: 'var(--color-text-muted)',
+                  cursor: 'pointer',
+                }}
+              >
+                Log out
+              </button>
+            </form>
+          </div>
         </section>
 
         {activeTab === 'appointments' && (
@@ -240,4 +282,3 @@ export default function PortalShell({
     </main>
   );
 }
-

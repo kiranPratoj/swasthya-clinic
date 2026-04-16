@@ -27,6 +27,12 @@ type PortalLinkMessageParams = {
   portalUrl: string;
 };
 
+type PatientOtpMessageParams = {
+  toPhone: string;
+  clinicName: string;
+  otp: string;
+};
+
 type WhatsAppConfig = {
   token: string | null;
   phoneNumberId: string | null;
@@ -184,6 +190,20 @@ export async function sendPortalLink(
     '',
     'This link is valid for 24 hours.',
     'If it expires, ask the clinic to send a new one.',
+  ].join('\n');
+
+  return sendTextMessage(params.toPhone, message);
+}
+
+export async function sendPatientOtp(
+  params: PatientOtpMessageParams
+): Promise<SendResult> {
+  const message = [
+    `Your Medilite AI login code for ${params.clinicName}:`,
+    params.otp,
+    '',
+    'This code is valid for 5 minutes.',
+    'Do not share it with anyone.',
   ].join('\n');
 
   return sendTextMessage(params.toPhone, message);

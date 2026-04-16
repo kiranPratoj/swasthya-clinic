@@ -1,8 +1,7 @@
 import { headers } from 'next/headers';
-import { getPatientProfile, getPatientReports } from '@/app/actions';
+import { getClinicDb } from '@/lib/db';
 import { validatePatientToken } from '@/lib/patientToken';
-import type { Appointment } from '@/lib/types';
-import PortalShell from './PortalShell';
+import PortalTokenBootstrap from './PortalTokenBootstrap';
 
 function ExpiredScreen() {
   return (
@@ -43,7 +42,7 @@ export default async function PatientPortalPage({
   params: Promise<{ slug: string; token: string }>;
 }) {
   const clinicId = (await headers()).get('x-clinic-id');
-  const { token } = await params;
+  const { slug, token } = await params;
 
   if (!clinicId) {
     return <ExpiredScreen />;
@@ -54,26 +53,17 @@ export default async function PatientPortalPage({
     return <ExpiredScreen />;
   }
 
-  const [profile, reports] = await Promise.all([
-    getPatientProfile(access.patientId),
-    getPatientReports(access.patientId),
-  ]);
+  const { data: patient, error } = await getClinicDb(clinicId)
+    .from('patients')
+    .select('id, name')
+    .eq('id', access.patientId)
+    .maybeSingle();
 
-  if (!profile) {
+  if (error || !patient) {
     return <ExpiredScreen />;
   }
 
-  const upcomingAppointments = profile.appointments.filter((appointment: Appointment) =>
-    !['completed', 'cancelled', 'no_show', 'rescheduled'].includes(appointment.status)
-  );
-
   return (
-    <PortalShell
-      patient={profile.patient}
-      upcomingAppointments={upcomingAppointments}
-      visitHistory={profile.visitHistory}
-      reports={reports}
-    />
+    <PortalTokenBootstrap slug={slug} token={token} patientName={patient.name as string} />
   );
 }
-

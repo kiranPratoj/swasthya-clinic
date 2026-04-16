@@ -70,7 +70,7 @@ function buildPatientPortalUrl(input: {
     const customBase = input.customDomain.startsWith('http')
       ? normalizeBaseUrl(input.customDomain)
       : `https://${normalizeBaseUrl(input.customDomain)}`;
-    return `${customBase}/${input.slug}/portal/${encodedToken}`;
+    return `${customBase}/portal/${encodedToken}`;
   }
 
   const appUrl = process.env.APP_URL?.trim();

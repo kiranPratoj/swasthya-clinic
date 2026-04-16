@@ -24,6 +24,11 @@ async function getClinicContext(): Promise<{ clinic: Clinic; doctor: Doctor | nu
   return { clinic: clinic as Clinic, doctor: doctor as Doctor | null };
 }
 
+function isPatientFacingPath(pathname: string | null, slug: string): boolean {
+  if (!pathname) return false;
+  return pathname.startsWith(`/${slug}/portal`) || pathname.startsWith(`/${slug}/patient`);
+}
+
 export default async function SlugLayout({
   children,
   params,
@@ -32,6 +37,13 @@ export default async function SlugLayout({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
+  const requestHeaders = await headers();
+  const pathname = requestHeaders.get('x-request-pathname');
+
+  if (isPatientFacingPath(pathname, slug)) {
+    return <>{children}</>;
+  }
+
   const ctx = await getClinicContext();
   const session = await getSessionOrNull();
 

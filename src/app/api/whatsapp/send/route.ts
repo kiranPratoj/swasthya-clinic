@@ -91,7 +91,7 @@ function buildPortalUrl(clinic: Pick<ClinicRecord, 'slug' | 'custom_domain'>, to
     const customBase = clinic.custom_domain.startsWith('http')
       ? normalizeBaseUrl(clinic.custom_domain)
       : `https://${normalizeBaseUrl(clinic.custom_domain)}`;
-    return `${customBase}/${clinic.slug}/portal/${encodedToken}`;
+    return `${customBase}/portal/${encodedToken}`;
   }
 
   const appUrl = process.env.APP_URL?.trim();
