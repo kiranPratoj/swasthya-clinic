@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { generateSoapNote, saveVisitRecord } from '@/app/actions';
 import type { QueueItem, VisitHistory, PatientReport } from '@/lib/types';
 import ReportCard from '@/components/reports/ReportCard';
+import ReportUploadForm from '@/components/reports/ReportUploadForm';
 
 type PrescriptionRow = {
   drug: string;
@@ -341,20 +342,30 @@ export default function ConsultForm({ appointment, slug, clinicName, reports }: 
   return (
     <div style={{ display: 'grid', gap: '2rem' }}>
 
-      {/* ── 0. Patient reports (read-only) ──────────────────────────────────── */}
-      {reports.length > 0 && (
-        <section className="card" style={{ display: 'grid', gap: '0.75rem' }}>
-          <h2 style={{ fontSize: '1rem', fontWeight: 800, margin: 0 }}>
-            Patient Reports
-            <span style={{ fontSize: '0.75rem', fontWeight: 500, color: 'var(--color-text-muted)', marginLeft: '0.5rem' }}>({reports.length})</span>
-          </h2>
+      {/* ── 0. Patient reports — view existing + upload on the spot ────────── */}
+      <section className="card" style={{ display: 'grid', gap: '0.75rem' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '0.5rem' }}>
+          <div>
+            <h2 style={{ fontSize: '1rem', fontWeight: 800, margin: 0 }}>
+              Reports &amp; Documents
+              {reports.length > 0 && (
+                <span style={{ fontSize: '0.75rem', fontWeight: 500, color: 'var(--color-text-muted)', marginLeft: '0.5rem' }}>({reports.length})</span>
+              )}
+            </h2>
+            <p style={{ margin: '0.2rem 0 0', fontSize: '0.8rem', color: 'var(--color-text-muted)' }}>
+              Upload printed reports, PDFs shared via WhatsApp, or photos taken on the spot
+            </p>
+          </div>
+        </div>
+        <ReportUploadForm patientId={appointment.patient_id} appointmentId={appointment.id} />
+        {reports.length > 0 && (
           <div style={{ display: 'grid', gap: '0.65rem' }}>
             {reports.map(report => (
               <ReportCard key={report.id} report={report} />
             ))}
           </div>
-        </section>
-      )}
+        )}
+      </section>
 
       {/* ── 1. Voice recording — primary CTA, always at top ─────────────────── */}
       <section
