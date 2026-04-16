@@ -148,7 +148,6 @@ export default function ReportUploadForm({ patientId, appointmentId }: Props) {
           ref={fileInputRef}
           type="file"
           accept="image/*,application/pdf"
-          capture="environment"
           onChange={handleFileChange}
           disabled={isLoading}
           style={{
