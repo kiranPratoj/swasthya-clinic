@@ -37,20 +37,47 @@ const EXTRACT_TOOL_PARAMS = {
   },
 };
 
+function extractRelevantSection(text: string): string {
+  // Sarvam Doc Intelligence embeds base64 images inline — strip them first.
+  // These can be 30KB+ each, making the markdown 70KB+ for a simple PDF.
+  const stripped = text.replace(/!\[Image\]\(data:[^)]{20,}\)/g, '[image]');
+
+  // The test data is often in an HTML <table> element
+  const tableMatch = stripped.match(/<table[\s\S]*?<\/table>/i);
+  if (tableMatch) {
+    // Include 500 chars before the table for context (lab name, date, etc.)
+    const tableIdx = stripped.indexOf(tableMatch[0]);
+    const start = Math.max(0, tableIdx - 500);
+    return stripped.slice(start, tableIdx + tableMatch[0].length + 500);
+  }
+
+  // Fallback: find test keywords and return surrounding text
+  const markers = ['test description', 'haemoglobin', 'hemoglobin', 'hba1c', 'glucose', 'cholesterol', 'wbc', 'rbc', 'platelet'];
+  const lower = stripped.toLowerCase();
+  let bestIdx = -1;
+  for (const marker of markers) {
+    const idx = lower.indexOf(marker);
+    if (idx !== -1 && (bestIdx === -1 || idx < bestIdx)) bestIdx = idx;
+  }
+  const start = Math.max(0, (bestIdx === -1 ? 0 : bestIdx) - 300);
+  return stripped.slice(start, start + 6000);
+}
+
 async function structureWithSarvam(text: string): Promise<ReportParseResult> {
-  const truncated = text.slice(0, 4000);
+  const relevant = extractRelevantSection(text);
   try {
     const result = await requestSarvamToolObject<ParsedReportData>({
-      systemPrompt: 'You are a medical report parser. Extract structured data from the given lab report text.',
-      userPrompt: `Extract all test results from this lab report:\n\n${truncated}`,
+      systemPrompt: 'You are a medical report parser. Extract structured data from the given lab report text. Return ALL test results you find.',
+      userPrompt: `Extract all test results from this lab report:\n\n${relevant}`,
       ...EXTRACT_TOOL_PARAMS,
+      maxTokens: 3000,
     });
     const parsed = result.parsed;
-    if (!parsed) return { rawSummary: text.slice(0, 500), parsedData: null };
+    if (!parsed) return { rawSummary: null, parsedData: null };
     return { rawSummary: buildSummary(parsed), parsedData: parsed };
   } catch (err) {
-    console.error('[reportParser] Sarvam structuring failed:', err);
-    return { rawSummary: text.slice(0, 500), parsedData: null };
+    console.error('[reportParser] Sarvam structuring failed:', (err as Error).message);
+    return { rawSummary: null, parsedData: null };
   }
 }
 
@@ -68,10 +95,9 @@ async function parseViaSarvamDocIntelligence(
     const client = new SarvamAIClient({ apiSubscriptionKey: apiKey });
 
     // 1. Create OCR job
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const initResponse = await client.documentIntelligence.initialise(
-      { language: 'en-IN', output_format: 'md' } as any
-    );
+    const initResponse = await client.documentIntelligence.initialise({
+      job_parameters: { language: 'en-IN', output_format: 'md' },
+    });
     const jobId = (initResponse as unknown as { job_id: string }).job_id;
     if (!jobId) return { rawSummary: null, parsedData: null };
 
@@ -113,7 +139,7 @@ async function parseViaSarvamDocIntelligence(
       if (terminal.includes(jobState)) break;
     }
     if (!['Completed', 'PartiallyCompleted'].includes(jobState)) {
-      console.warn('[reportParser] OCR job did not complete, state:', jobState);
+      console.error('[reportParser] OCR job did not complete, state:', jobState);
       return { rawSummary: null, parsedData: null };
     }
 
