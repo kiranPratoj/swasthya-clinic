@@ -3,12 +3,14 @@ import JSZip from 'jszip';
 import { requestSarvamToolObject } from './sarvamChatAdapter';
 import type { ParsedReportData } from './types';
 
+// pdf-parse v2 uses pdfjs-dist web workers which break in Next.js server.
+// Both PDFs and images go through Sarvam Document Intelligence (OCR).
+
 type ReportParseResult = {
   rawSummary: string | null;
   parsedData: ParsedReportData | null;
 };
 
-// Shared Sarvam tool parameters for structured extraction
 const EXTRACT_TOOL_PARAMS = {
   toolName: 'extract_report',
   toolDescription: 'Extracts structured lab report data from text',
@@ -46,46 +48,26 @@ async function structureWithSarvam(text: string): Promise<ReportParseResult> {
     const parsed = result.parsed;
     if (!parsed) return { rawSummary: text.slice(0, 500), parsedData: null };
     return { rawSummary: buildSummary(parsed), parsedData: parsed };
-  } catch {
+  } catch (err) {
+    console.error('[reportParser] Sarvam structuring failed:', err);
     return { rawSummary: text.slice(0, 500), parsedData: null };
   }
 }
 
-// ── PDF path: pdf-parse → text → Sarvam tool-calling ─────────────────────────
+// ── Sarvam Document Intelligence — shared OCR pipeline ───────────────────────
+// PDFs upload directly; images must be wrapped in a ZIP first.
 
-async function parsePdf(buffer: Buffer): Promise<ReportParseResult> {
-  let rawText = '';
-  try {
-    const { PDFParse } = (await import('pdf-parse')) as unknown as {
-      PDFParse: new (opts: { data: Buffer }) => { getText(): Promise<{ text: string }> };
-    };
-    const parser = new PDFParse({ data: buffer });
-    const result = await parser.getText();
-    rawText = result.text?.trim() ?? '';
-  } catch {
-    return { rawSummary: null, parsedData: null };
-  }
-
-  if (!rawText) return { rawSummary: null, parsedData: null };
-  return structureWithSarvam(rawText);
-}
-
-// ── Image path: Sarvam Document Intelligence (OCR) → Sarvam tool-calling ─────
-
-async function parseImage(buffer: Buffer, mimeType: string): Promise<ReportParseResult> {
+async function parseViaSarvamDocIntelligence(
+  filename: string,
+  body: Uint8Array,
+): Promise<ReportParseResult> {
   const apiKey = process.env.SARVAM_API_KEY;
   if (!apiKey) return { rawSummary: null, parsedData: null };
 
   try {
     const client = new SarvamAIClient({ apiSubscriptionKey: apiKey });
 
-    // Sarvam Document Intelligence requires images packed in a ZIP
-    const zip = new JSZip();
-    const ext = mimeType === 'image/png' ? 'png' : mimeType === 'image/webp' ? 'webp' : 'jpg';
-    zip.file(`report.${ext}`, buffer);
-    const zipBuffer = await zip.generateAsync({ type: 'nodebuffer' });
-
-    // 1. Create job (cast to bypass SDK type — raw API uses snake_case fields)
+    // 1. Create OCR job
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const initResponse = await client.documentIntelligence.initialise(
       { language: 'en-IN', output_format: 'md' } as any
@@ -96,7 +78,7 @@ async function parseImage(buffer: Buffer, mimeType: string): Promise<ReportParse
     // 2. Get presigned upload URL
     const uploadResponse = await client.documentIntelligence.getUploadLinks({
       job_id: jobId,
-      files: ['report.zip'],
+      files: [filename],
     });
     const uploadUrls = (uploadResponse as unknown as {
       upload_urls: Record<string, { file_url: string; file_metadata?: Record<string, string> }>;
@@ -104,22 +86,26 @@ async function parseImage(buffer: Buffer, mimeType: string): Promise<ReportParse
     const uploadInfo = Object.values(uploadUrls)[0];
     if (!uploadInfo?.file_url) return { rawSummary: null, parsedData: null };
 
-    // 3. PUT zip to presigned URL
+    // 3. PUT to presigned URL
     const putHeaders: Record<string, string> = { 'x-ms-blob-type': 'BlockBlob' };
     if (uploadInfo.file_metadata) {
       for (const [k, v] of Object.entries(uploadInfo.file_metadata)) {
         if (typeof v === 'string') putHeaders[k] = v;
       }
     }
-    const putRes = await fetch(uploadInfo.file_url, { method: 'PUT', headers: putHeaders, body: new Uint8Array(zipBuffer) });
-    if (!putRes.ok) return { rawSummary: null, parsedData: null };
+    // Uint8Array satisfies BodyInit in the fetch spec; cast needed for Next.js TS config
+    const putRes = await fetch(uploadInfo.file_url, { method: 'PUT', headers: putHeaders, body: body as unknown as BodyInit });
+    if (!putRes.ok) {
+      console.error('[reportParser] upload failed:', putRes.status, putRes.statusText);
+      return { rawSummary: null, parsedData: null };
+    }
 
     // 4. Start processing
     await client.documentIntelligence.start(jobId);
 
-    // 5. Poll until complete (max ~90 seconds)
-    let jobState = '';
+    // 5. Poll until complete (max 90 seconds)
     const terminal = ['Completed', 'PartiallyCompleted', 'Failed'];
+    let jobState = '';
     for (let i = 0; i < 30; i++) {
       await new Promise((r) => setTimeout(r, 3000));
       const status = await client.documentIntelligence.getStatus(jobId);
@@ -127,10 +113,11 @@ async function parseImage(buffer: Buffer, mimeType: string): Promise<ReportParse
       if (terminal.includes(jobState)) break;
     }
     if (!['Completed', 'PartiallyCompleted'].includes(jobState)) {
+      console.warn('[reportParser] OCR job did not complete, state:', jobState);
       return { rawSummary: null, parsedData: null };
     }
 
-    // 6. Download result ZIP
+    // 6. Download result ZIP and extract markdown
     const downloadResponse = await client.documentIntelligence.getDownloadLinks(jobId);
     const downloadUrls = (downloadResponse as unknown as {
       download_urls: Record<string, { file_url: string }>;
@@ -140,10 +127,8 @@ async function parseImage(buffer: Buffer, mimeType: string): Promise<ReportParse
 
     const dlRes = await fetch(downloadInfo.file_url);
     if (!dlRes.ok) return { rawSummary: null, parsedData: null };
-    const resultBuffer = Buffer.from(await dlRes.arrayBuffer());
 
-    // 7. Extract markdown from result ZIP
-    const resultZip = await JSZip.loadAsync(resultBuffer);
+    const resultZip = await JSZip.loadAsync(await dlRes.arrayBuffer());
     const mdFiles = Object.keys(resultZip.files).filter(
       (f) => f.endsWith('.md') && !resultZip.files[f]?.dir
     );
@@ -152,9 +137,10 @@ async function parseImage(buffer: Buffer, mimeType: string): Promise<ReportParse
     const markdownText = await resultZip.files[mdFiles[0]]!.async('string');
     if (!markdownText.trim()) return { rawSummary: null, parsedData: null };
 
-    // 8. Structure with Sarvam chat
+    // 7. Structure extracted text with Sarvam chat
     return structureWithSarvam(markdownText);
-  } catch {
+  } catch (err) {
+    console.error('[reportParser] OCR pipeline failed:', err);
     return { rawSummary: null, parsedData: null };
   }
 }
@@ -184,8 +170,18 @@ export async function parseReport(
   mimeType: string,
 ): Promise<ReportParseResult> {
   try {
-    if (mimeType === 'application/pdf') return await parsePdf(buffer);
-    if (mimeType.startsWith('image/')) return await parseImage(buffer, mimeType);
+    if (mimeType === 'application/pdf') {
+      // PDFs upload directly to Sarvam Doc Intelligence
+      return await parseViaSarvamDocIntelligence('report.pdf', new Uint8Array(buffer));
+    }
+    if (mimeType.startsWith('image/')) {
+      // Images must be wrapped in a ZIP before uploading
+      const zip = new JSZip();
+      const ext = mimeType === 'image/png' ? 'png' : mimeType === 'image/webp' ? 'webp' : 'jpg';
+      zip.file(`report.${ext}`, buffer);
+      const zipBuffer = await zip.generateAsync({ type: 'nodebuffer' });
+      return await parseViaSarvamDocIntelligence('report.zip', new Uint8Array(zipBuffer));
+    }
     return { rawSummary: null, parsedData: null };
   } catch {
     return { rawSummary: null, parsedData: null };

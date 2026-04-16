@@ -42,11 +42,7 @@ const data = result.parsed; // typed as MyType
 - Result is in `.output` property, not `.object`
 - Model string for Vercel AI Gateway: `'anthropic/claude-haiku-4.5'`
 
-## pdf-parse v2 API (class-based, not default function)
-```ts
-const { PDFParse } = await import('pdf-parse') as unknown as {
-  PDFParse: new (opts: { data: Buffer }) => { getText(): Promise<{ text: string }> };
-};
-const parser = new PDFParse({ data: buffer });
-const { text } = await parser.getText();
-```
+## PDF parsing
+Do NOT use `pdf-parse` — it uses `pdfjs-dist` web workers that crash in Next.js server.
+PDFs are parsed via Sarvam Document Intelligence (same as images), uploaded directly (no ZIP).
+See `parseViaSarvamDocIntelligence()` in `reportParsingAdapter.ts`.
