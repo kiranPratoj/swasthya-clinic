@@ -3,32 +3,41 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { updatePatient } from '@/app/actions';
+import { getIndianMobileValidationError, normalizeIndianMobile } from '@/lib/phone';
 
 type Props = {
   patientId: string;
   initialName: string;
   initialPhone: string;
+  initialNoPhone: boolean;
 };
 
-export default function PatientEditForm({ patientId, initialName, initialPhone }: Props) {
+export default function PatientEditForm({
+  patientId,
+  initialName,
+  initialPhone,
+  initialNoPhone,
+}: Props) {
   const router = useRouter();
   const [isEditing, setIsEditing] = useState(false);
   const [name, setName] = useState(initialName);
   const [phone, setPhone] = useState(initialPhone);
+  const [noPhone, setNoPhone] = useState(initialNoPhone);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   async function handleSave() {
     const nextName = name.trim();
-    const nextPhone = phone.replace(/\D/g, '');
+    const nextPhone = normalizeIndianMobile(phone);
 
     if (nextName.length < 2) {
       setError('Name must be at least 2 characters.');
       return;
     }
 
-    if (!/^\d{10}$/.test(nextPhone)) {
-      setError('Phone must be exactly 10 digits.');
+    const phoneError = noPhone ? null : getIndianMobileValidationError(nextPhone);
+    if (phoneError) {
+      setError(phoneError);
       return;
     }
 
@@ -36,7 +45,7 @@ export default function PatientEditForm({ patientId, initialName, initialPhone }
     setError(null);
 
     try {
-      await updatePatient(patientId, { name: nextName, phone: nextPhone });
+      await updatePatient(patientId, { name: nextName, phone: nextPhone, noPhone });
       setIsEditing(false);
       router.refresh();
     } catch (saveError: unknown) {
@@ -72,12 +81,31 @@ export default function PatientEditForm({ patientId, initialName, initialPhone }
           <div style={{ display: 'grid', gap: '0.65rem' }}>
             <input value={name} disabled={isSaving} onChange={(event) => setName(event.target.value)} aria-label="Patient name" />
             <input
-              value={phone}
+              value={noPhone ? '' : phone}
               disabled={isSaving}
-              onChange={(event) => setPhone(event.target.value.replace(/\D/g, '').slice(0, 10))}
+              onChange={(event) => {
+                setPhone(normalizeIndianMobile(event.target.value).slice(0, 10));
+                setNoPhone(false);
+              }}
               inputMode="numeric"
               aria-label="Patient phone"
+              placeholder={noPhone ? 'No mobile available' : '10-digit mobile number'}
             />
+            <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 600 }}>
+              <input
+                type="checkbox"
+                checked={noPhone}
+                disabled={isSaving}
+                onChange={(event) => {
+                  const checked = event.target.checked;
+                  setNoPhone(checked);
+                  if (checked) {
+                    setPhone('');
+                  }
+                }}
+              />
+              Patient has no mobile
+            </label>
           </div>
           <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
             <button type="button" disabled={isSaving} onClick={() => void handleSave()}>
@@ -90,6 +118,7 @@ export default function PatientEditForm({ patientId, initialName, initialPhone }
                 setIsEditing(false);
                 setName(initialName);
                 setPhone(initialPhone);
+                setNoPhone(initialNoPhone);
                 setError(null);
               }}
             >

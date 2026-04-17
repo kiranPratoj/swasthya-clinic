@@ -306,7 +306,9 @@ export default async function PatientProfilePage({
         <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap' }}>
           <div style={{ display: 'grid', gap: '0.35rem' }}>
             <h1 style={{ fontSize: '1.9rem', fontWeight: 800 }}>{profile.patient.name}</h1>
-            <p style={{ color: 'var(--color-text-muted)' }}>{profile.patient.phone ?? 'No phone number'}</p>
+            <p style={{ color: 'var(--color-text-muted)' }}>
+              {profile.patient.no_phone ? 'No mobile available' : (profile.patient.phone ?? 'No phone number')}
+            </p>
             <p style={{ color: 'var(--color-text-muted)' }}>
               {profile.patient.age ? `Age ${profile.patient.age}` : 'Age not recorded'} · {totalVisits} total visit{totalVisits === 1 ? '' : 's'}
             </p>
@@ -316,6 +318,7 @@ export default async function PatientProfilePage({
               patientId={profile.patient.id}
               initialName={profile.patient.name}
               initialPhone={profile.patient.phone ?? ''}
+              initialNoPhone={profile.patient.no_phone}
             />
             {profile.patient.phone && <SendPortalLinkButton patientId={profile.patient.id} />}
           </div>

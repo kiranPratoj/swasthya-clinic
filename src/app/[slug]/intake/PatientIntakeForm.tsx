@@ -2,6 +2,7 @@
 
 import { FormEvent, useCallback, useEffect, useRef, useState } from 'react';
 import { createAppointment } from '@/app/actions';
+import { getIndianMobileValidationError, normalizeIndianMobile } from '@/lib/phone';
 import { synthesizeKannadaSpeech } from '@/lib/ttsAdapter';
 import type { PatientIntakeDraft, VisitType, VoiceDraft } from '@/lib/types';
 import PatientLookup from './PatientLookup';
@@ -121,6 +122,7 @@ export default function PatientIntakeForm({
   const [patientName, setPatientName] = useState('');
   const [selectedPatientId, setSelectedPatientId] = useState('');
   const [allowSharedMobileNewPatient, setAllowSharedMobileNewPatient] = useState(false);
+  const [noPhoneAvailable, setNoPhoneAvailable] = useState(false);
   const [age, setAge] = useState('');
   const [phone, setPhone] = useState('');
   const [complaint, setComplaint] = useState('');
@@ -150,6 +152,11 @@ export default function PatientIntakeForm({
 
   const bookedFor = getTodayIsoDate();
   const missingFields = voiceDraft?.structuredData.missingFields ?? [];
+  const normalizedPhone = normalizeIndianMobile(phone).slice(0, 10);
+  const phoneValidationError =
+    !noPhoneAvailable && normalizedPhone.length >= 10
+      ? getIndianMobileValidationError(normalizedPhone)
+      : null;
 
   function stopMediaTracks() {
     mediaStreamRef.current?.getTracks().forEach((track) => {
@@ -197,9 +204,9 @@ export default function PatientIntakeForm({
         : structuredData.age ?? current
     );
     setPhone((current) =>
-      selectedPatientId || phoneDirty || current.trim()
+      selectedPatientId || noPhoneAvailable || phoneDirty || current.trim()
         ? current
-        : structuredData.phone ?? current
+        : normalizeIndianMobile(structuredData.phone ?? current).slice(0, 10)
     );
     setComplaint((current) =>
       complaintDirty || current.trim() ? current : structuredData.complaint ?? current
@@ -436,20 +443,28 @@ export default function PatientIntakeForm({
     const formData = new FormData(event.currentTarget);
     formData.set('patientName', patientName.trim());
     formData.set('age', age.trim());
-    formData.set('phone', phone.trim());
+    formData.set('phone', normalizedPhone);
     formData.set('complaint', complaint.trim());
     formData.set('visitType', visitType);
     formData.set('doctorId', doctorId);
     formData.set('bookedFor', bookedFor);
     formData.set('allowSharedMobileNewPatient', allowSharedMobileNewPatient ? 'true' : 'false');
+    formData.set('no_phone', noPhoneAvailable ? 'true' : 'false');
     formData.set('billing_amount', normalizedBillAmount);
     formData.set('payment_utr', paymentUtr.trim());
+
+    if (!selectedPatientId && !noPhoneAvailable && phoneValidationError) {
+      setSubmitError(phoneValidationError);
+      setIsSubmitting(false);
+      return;
+    }
 
     try {
       const result = await createAppointment(formData);
       setConfirmedToken(result.tokenNumber);
     } catch (error: unknown) {
       setSubmitError(getErrorMessage(error));
+    } finally {
       setIsSubmitting(false);
     }
   }
@@ -480,6 +495,7 @@ export default function PatientIntakeForm({
     setPatientName('');
     setSelectedPatientId('');
     setAllowSharedMobileNewPatient(false);
+    setNoPhoneAvailable(false);
     setAge('');
     setPhone('');
     setComplaint('');
@@ -508,6 +524,7 @@ export default function PatientIntakeForm({
         setPatientName('');
         setSelectedPatientId('');
         setAllowSharedMobileNewPatient(false);
+        setNoPhoneAvailable(false);
         setAge('');
         setPhone('');
         setComplaint('');
@@ -525,6 +542,7 @@ export default function PatientIntakeForm({
       setPatientName(data.name);
       setSelectedPatientId(data.id);
       setAllowSharedMobileNewPatient(false);
+      setNoPhoneAvailable(false);
       setAge(data.age);
       setPhone(data.phone);
       setComplaint('');
@@ -548,6 +566,7 @@ export default function PatientIntakeForm({
     setPatientName('');
     setSelectedPatientId('');
     setAllowSharedMobileNewPatient(Boolean(options?.allowSharedMobile));
+    setNoPhoneAvailable(false);
     setAge('');
     setPhone(lookupPhone);
     setComplaint('');
@@ -561,6 +580,33 @@ export default function PatientIntakeForm({
     setVisitTypeDirty(false);
     setComplaintDirty(false);
   }, []);
+
+  const handleNoPhoneAvailable = useCallback(() => {
+    setPatientName('');
+    setSelectedPatientId('');
+    setAllowSharedMobileNewPatient(false);
+    setNoPhoneAvailable(true);
+    setAge('');
+    setPhone('');
+    setComplaint('');
+    setVisitType('walk-in');
+    setSubmitError(null);
+    setDetailsStepVisible(true);
+    setDetailsStepLabel('new');
+    setPatientNameDirty(false);
+    setAgeDirty(false);
+    setPhoneDirty(false);
+    setVisitTypeDirty(false);
+    setComplaintDirty(false);
+  }, []);
+
+  const canSubmit =
+    !isSubmitting &&
+    !isProcessingVoice &&
+    patientName.trim().length >= 2 &&
+    complaint.trim().length > 0 &&
+    (detailsStepLabel !== 'existing' || Boolean(selectedPatientId)) &&
+    (noPhoneAvailable || (normalizedPhone.length === 10 && !phoneValidationError));
 
   if (confirmedToken !== null) {
     return (
@@ -664,6 +710,7 @@ export default function PatientIntakeForm({
         <PatientLookup
           onPatientFound={handleExistingPatientFound}
           onCreateNewPatient={handleCreateNewPatient}
+          onNoPhoneAvailable={handleNoPhoneAvailable}
         />
       </section>
 
@@ -707,6 +754,8 @@ export default function PatientIntakeForm({
                   <h2 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 800 }}>
                     {detailsStepLabel === 'existing'
                       ? 'Confirm Visit Details'
+                      : noPhoneAvailable
+                        ? 'Create Patient Without Mobile'
                       : detailsStepLabel === 'shared-mobile'
                         ? 'Create New Family Patient'
                         : 'Create New Patient'}
@@ -718,6 +767,7 @@ export default function PatientIntakeForm({
                     setDetailsStepVisible(false);
                     setSelectedPatientId('');
                     setAllowSharedMobileNewPatient(false);
+                    setNoPhoneAvailable(false);
                     setDetailsStepLabel('new');
                   }}
                   style={{
@@ -756,6 +806,20 @@ export default function PatientIntakeForm({
                   }}
                 >
                   Creating a new patient with an existing family mobile number.
+                </div>
+              )}
+              {noPhoneAvailable && (
+                <div
+                  style={{
+                    background: 'white',
+                    border: '1px solid #fcd34d',
+                    borderRadius: 'var(--radius-md)',
+                    padding: '0.75rem 0.9rem',
+                    color: 'var(--color-warning)',
+                    fontWeight: 700,
+                  }}
+                >
+                  No mobile available. Patient continuity and patient login will remain limited until a phone is added later.
                 </div>
               )}
 
@@ -1086,18 +1150,20 @@ export default function PatientIntakeForm({
                     id="phone"
                     name="phone"
                     type="tel"
-                    value={phone}
+                    value={noPhoneAvailable ? '' : normalizedPhone}
                     onChange={(event) => {
-                      setPhone(event.target.value);
+                      setPhone(normalizeIndianMobile(event.target.value).slice(0, 10));
                       setPhoneDirty(true);
                       setSelectedPatientId('');
                       setAllowSharedMobileNewPatient(false);
+                      setNoPhoneAvailable(false);
                       if (detailsStepLabel === 'shared-mobile') {
                         setDetailsStepLabel('new');
                       }
                     }}
-                    required
-                    placeholder="10-digit phone number"
+                    disabled={noPhoneAvailable}
+                    required={!noPhoneAvailable}
+                    placeholder={noPhoneAvailable ? 'No mobile available' : '10-digit phone number'}
                   />
                 )}
               </div>
@@ -1126,6 +1192,21 @@ export default function PatientIntakeForm({
                 )}
               </div>
             </div>
+
+            {phoneValidationError && (
+              <div
+                style={{
+                  background: 'var(--color-error-bg)',
+                  border: '1px solid #fca5a5',
+                  borderRadius: 'var(--radius-md)',
+                  padding: '0.75rem 0.9rem',
+                  color: 'var(--color-error)',
+                  fontWeight: 600,
+                }}
+              >
+                {phoneValidationError}
+              </div>
+            )}
 
             <div>
               <label htmlFor="complaint">Complaint</label>
@@ -1157,6 +1238,7 @@ export default function PatientIntakeForm({
               name="allowSharedMobileNewPatient"
               value={allowSharedMobileNewPatient ? 'true' : 'false'}
             />
+            <input type="hidden" name="no_phone" value={noPhoneAvailable ? 'true' : 'false'} />
             {/* Payment collection */}
             <div style={{ display: 'grid', gap: '0.75rem', padding: '1rem', background: 'var(--color-bg)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--color-border)' }}>
               <p style={{ fontWeight: 800, fontSize: '0.95rem', margin: 0 }}>Payment</p>
@@ -1289,7 +1371,7 @@ export default function PatientIntakeForm({
 
               <button
                 type="submit"
-                disabled={isSubmitting || isProcessingVoice}
+                disabled={!canSubmit}
                 style={{
                   border: 'none',
                   borderRadius: 'var(--radius-md)',
@@ -1299,6 +1381,7 @@ export default function PatientIntakeForm({
                   fontWeight: 800,
                   minWidth: '12rem',
                   boxShadow: 'var(--shadow-sm)',
+                  opacity: canSubmit ? 1 : 0.65,
                 }}
               >
                 {isSubmitting ? 'Creating Token...' : 'Create Token'}

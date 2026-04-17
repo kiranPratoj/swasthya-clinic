@@ -9,12 +9,19 @@ type StaffMoreMenuProps = {
 };
 
 const summaryStyle: CSSProperties = {
-  listStyle: 'none',
   cursor: 'pointer',
-  fontSize: '0.79rem',
+  fontSize: '0.8rem',
   fontWeight: 700,
-  color: 'var(--color-text-muted)',
+  color: 'var(--color-primary)',
   whiteSpace: 'nowrap',
+  padding: '0.55rem 0.85rem',
+  borderRadius: '999px',
+  border: '1px solid var(--color-primary-outline)',
+  background: 'white',
+  boxShadow: 'var(--shadow-sm)',
+  appearance: 'none',
+  WebkitAppearance: 'none',
+  lineHeight: 1.2,
 };
 
 const panelStyle: CSSProperties = {

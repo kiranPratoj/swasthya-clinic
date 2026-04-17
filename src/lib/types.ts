@@ -55,6 +55,7 @@ export type Patient = {
   name: string;
   age: number | null;
   phone: string | null;
+  no_phone: boolean;
   created_at: string;
 };
 

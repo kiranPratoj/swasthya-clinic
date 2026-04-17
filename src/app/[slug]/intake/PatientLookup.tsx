@@ -2,11 +2,13 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { getPatientHistoryById, searchPatientsByPhone } from '@/app/actions';
+import { getIndianMobileValidationError, normalizeIndianMobile } from '@/lib/phone';
 import type { Appointment, AppointmentStatus } from '@/lib/types';
 
 type PatientLookupProps = {
   onPatientFound: (data: { id: string; name: string; phone: string; age: string } | null) => void;
   onCreateNewPatient: (phone: string, options?: { allowSharedMobile?: boolean }) => void;
+  onNoPhoneAvailable: () => void;
 };
 
 type PatientSearchResult = {
@@ -112,6 +114,7 @@ function ArrowRightIcon() {
 export default function PatientLookup({
   onPatientFound,
   onCreateNewPatient,
+  onNoPhoneAvailable,
 }: PatientLookupProps) {
   const [isMounted, setIsMounted] = useState(false);
   const [lookupPhone, setLookupPhone] = useState('');
@@ -174,7 +177,11 @@ export default function PatientLookup({
             setResult(INITIAL_STATE);
             onPatientFound(null);
 
-            if (normalizedPhone.length === 10 && autoAdvancePhoneRef.current !== normalizedPhone) {
+            if (
+              normalizedPhone.length === 10 &&
+              !getIndianMobileValidationError(normalizedPhone) &&
+              autoAdvancePhoneRef.current !== normalizedPhone
+            ) {
               autoAdvancePhoneRef.current = normalizedPhone;
               onCreateNewPatient(normalizedPhone);
             }
@@ -207,6 +214,18 @@ export default function PatientLookup({
     () => getPulseStyle(isLoading, pulsePhase),
     [isLoading, pulsePhase]
   );
+  const lookupPhoneError =
+    lookupPhone.length >= 10 ? getIndianMobileValidationError(lookupPhone) : null;
+
+  function clearLookupState() {
+    latestRequestRef.current += 1;
+    setLookupPhone('');
+    setSearchedPhone('');
+    setSearchResults([]);
+    setResult(INITIAL_STATE);
+    setIsLoading(false);
+    autoAdvancePhoneRef.current = null;
+  }
 
   const hasHistory = isMounted && result.history.length > 0;
   const exactPhoneMatches =
@@ -301,7 +320,7 @@ export default function PatientLookup({
           autoComplete="tel"
           value={lookupPhone}
           onChange={(event) => {
-            const nextPhone = event.target.value.replace(/\D/g, '').slice(0, 10);
+            const nextPhone = normalizeIndianMobile(event.target.value).slice(0, 10);
             setLookupPhone(nextPhone);
 
             if (nextPhone.length < 3) {
@@ -323,7 +342,14 @@ export default function PatientLookup({
           }}
         />
 
-        {hasExactPhoneMatch && (
+        {lookupPhoneError && (
+          <p style={{ color: 'var(--color-error)', fontWeight: 600, fontSize: '0.88rem' }}>
+            {lookupPhoneError}
+          </p>
+        )}
+
+        <div style={{ display: 'flex', gap: '0.6rem', flexWrap: 'wrap' }}>
+          {hasExactPhoneMatch && !lookupPhoneError && (
           <button
             type="button"
             onClick={() => onCreateNewPatient(searchedPhone, { allowSharedMobile: true })}
@@ -339,10 +365,31 @@ export default function PatientLookup({
           >
             Create another patient with same mobile
           </button>
-        )}
+          )}
+          <button
+            type="button"
+            onClick={() => {
+              onNoPhoneAvailable();
+              window.setTimeout(() => {
+                clearLookupState();
+              }, 0);
+            }}
+            style={{
+              border: '1px solid var(--color-border)',
+              borderRadius: 'var(--radius-md)',
+              background: 'white',
+              color: 'var(--color-text)',
+              padding: '0.8rem 1rem',
+              fontWeight: 800,
+              justifySelf: 'start',
+            }}
+          >
+            Patient has no mobile
+          </button>
+        </div>
       </div>
 
-      {isMounted && !hasHistory && searchResults.length > 0 && (
+      {isMounted && !hasHistory && searchResults.length > 0 && !lookupPhoneError && (
         <div
           style={{
             background: 'white',
@@ -602,7 +649,8 @@ export default function PatientLookup({
         !hasHistory &&
         searchedPhone.length >= 3 &&
         searchedPhone === lookupPhone &&
-        searchResults.length === 0 && (
+        searchResults.length === 0 &&
+        !lookupPhoneError && (
           <div
             style={{
               background: 'white',

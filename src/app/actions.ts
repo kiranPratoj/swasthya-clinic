@@ -5,6 +5,11 @@ import { revalidatePath } from 'next/cache';
 import { getDb, getClinicDb, auditLog } from '@/lib/db';
 import { requireSession } from '@/lib/auth';
 import { computeBillSnapshot, toMoneyNumber } from '@/lib/billing';
+import {
+  getIndianMobileValidationError,
+  normalizeIndianMobile,
+  parsePatientPhone,
+} from '@/lib/phone';
 import { createPatientToken } from '@/lib/patientToken';
 import { attachPatientReportSignedUrls } from '@/lib/reportUrls';
 import type {
@@ -453,9 +458,10 @@ export async function createAppointment(formData: FormData): Promise<{ appointme
 
   const existingPatientId = (formData.get('patientId') as string | null)?.trim() || null;
   const allowSharedMobileNewPatient = formData.get('allowSharedMobileNewPatient') === 'true';
+  const noPhone = formData.get('no_phone') === 'true';
   const patientName = formData.get('patientName') as string;
   const age = formData.get('age') ? parseInt(formData.get('age') as string) : null;
-  const phone = formData.get('phone') as string;
+  const rawPhone = String(formData.get('phone') ?? '');
   const complaint = formData.get('complaint') as string;
   const visitType = (formData.get('visitType') as string) || 'walk-in';
   const bookedFor = (formData.get('bookedFor') as string) || new Date().toISOString().split('T')[0];
@@ -479,6 +485,30 @@ export async function createAppointment(formData: FormData): Promise<{ appointme
 
   if (payment_state === 'paid' && payment_mode === 'upi' && !rawPaymentUtr) {
     throw new Error('UPI payments require a UTR number.');
+  }
+
+  if (patientName.trim().length < 2) {
+    throw new Error('Patient name must be at least 2 characters.');
+  }
+
+  if (!complaint.trim()) {
+    throw new Error('Complaint is required.');
+  }
+
+  const normalizedAge = Number.isFinite(age) ? age : null;
+  const { phone, error: phoneError } = parsePatientPhone(rawPhone, noPhone);
+
+  if (!existingPatientId && phoneError) {
+    await auditLog(clinicId, actorRole, 'invalid_phone_rejected', undefined, {
+      rawPhone: rawPhone.trim(),
+      normalizedPhone: normalizeIndianMobile(rawPhone),
+      noPhone,
+    });
+    throw new Error(phoneError);
+  }
+
+  if (existingPatientId && noPhone) {
+    throw new Error('Existing patient selection cannot be combined with no-phone fallback.');
   }
 
   const baseAppointmentInsert = {
@@ -510,16 +540,23 @@ export async function createAppointment(formData: FormData): Promise<{ appointme
 
     patientId = selectedPatient.id;
   } else {
-    const { data: existingPatients, error: existingPatientsError } = await db
-      .from('patients')
-      .select('id')
-      .eq('clinic_id', clinicId)
-      .eq('phone', phone);
+    let existingPatients: Array<{ id: string }> = [];
+    if (!noPhone) {
+      const { data, error: existingPatientsError } = await db
+        .from('patients')
+        .select('id')
+        .eq('clinic_id', clinicId)
+        .eq('phone', phone);
+      if (existingPatientsError) throw new Error(existingPatientsError.message);
+      existingPatients = (data ?? []) as Array<{ id: string }>;
+    }
 
-    if (existingPatientsError) throw new Error(existingPatientsError.message);
-
-    if ((existingPatients?.length ?? 0) > 0) {
+    if (existingPatients.length > 0) {
       if (!allowSharedMobileNewPatient) {
+        await auditLog(clinicId, actorRole, 'patient_phone_matches_found', undefined, {
+          phone,
+          matchCount: existingPatients.length,
+        });
         throw new Error(
           'This mobile number already exists. Select the existing patient or choose "Create another patient with same mobile".'
         );
@@ -527,15 +564,47 @@ export async function createAppointment(formData: FormData): Promise<{ appointme
 
       const { data: newPatient, error: patErr } = await db
         .from('patients')
-        .insert({ clinic_id: clinicId, name: patientName, age, phone })
+        .insert({
+          clinic_id: clinicId,
+          name: patientName.trim(),
+          age: normalizedAge,
+          phone,
+          no_phone: false,
+        })
         .select('id')
         .single();
       if (patErr) throw new Error(patErr.message);
       patientId = newPatient.id;
+      await auditLog(clinicId, actorRole, 'patient_created_with_shared_mobile', patientId, {
+        phone,
+      });
+    } else if (noPhone) {
+      const { data: newPatient, error: patErr } = await db
+        .from('patients')
+        .insert({
+          clinic_id: clinicId,
+          name: patientName.trim(),
+          age: normalizedAge,
+          phone: null,
+          no_phone: true,
+        })
+        .select('id')
+        .single();
+      if (patErr) throw new Error(patErr.message);
+      patientId = newPatient.id;
+      await auditLog(clinicId, actorRole, 'patient_created_without_phone', patientId, {
+        no_phone: true,
+      });
     } else {
       const { data: newPatient, error: patErr } = await db
         .from('patients')
-        .insert({ clinic_id: clinicId, name: patientName, age, phone })
+        .insert({
+          clinic_id: clinicId,
+          name: patientName.trim(),
+          age: normalizedAge,
+          phone,
+          no_phone: false,
+        })
         .select('id')
         .single();
       if (patErr) throw new Error(patErr.message);
@@ -1014,7 +1083,7 @@ export async function searchPatientsByPhone(
   }>
 > {
   const { clinicId, db } = await getTenantDb();
-  const digitsOnly = query.replace(/\D/g, '').slice(0, 10);
+  const digitsOnly = normalizeIndianMobile(query).slice(0, 10);
 
   if (digitsOnly.length < 3) {
     return [];
@@ -1081,12 +1150,16 @@ export async function searchPatientsByPhone(
 
 export async function getPatientByPhone(phone: string): Promise<PatientWithHistory | null> {
   const { clinicId, db } = await getTenantDb();
+  const normalizedPhone = normalizeIndianMobile(phone);
+  if (!normalizedPhone) {
+    return null;
+  }
 
   const { data: patient } = await db
     .from('patients')
     .select('*')
     .eq('clinic_id', clinicId)
-    .eq('phone', phone)
+    .eq('phone', normalizedPhone)
     .maybeSingle();
 
   if (!patient) return null;
@@ -1342,7 +1415,7 @@ export async function createPatientPortalLink(
 
 export async function updatePatient(
   patientId: string,
-  updates: { name: string; phone: string }
+  updates: { name: string; phone: string; noPhone?: boolean }
 ): Promise<void> {
   const { clinicId, db } = await getTenantDb();
   const actorRole = await getActorRole();
@@ -1358,11 +1431,23 @@ export async function updatePatient(
     throw new Error('Patient not found for this clinic.');
   }
 
+  const nextName = updates.name.trim();
+  if (nextName.length < 2) {
+    throw new Error('Name must be at least 2 characters.');
+  }
+
+  const noPhone = updates.noPhone === true;
+  const { phone, error: phoneError } = parsePatientPhone(updates.phone, noPhone);
+  if (phoneError) {
+    throw new Error(phoneError);
+  }
+
   const { error } = await db
     .from('patients')
     .update({
-      name: updates.name.trim(),
-      phone: updates.phone.trim(),
+      name: nextName,
+      phone,
+      no_phone: noPhone,
     })
     .eq('id', patientId)
     .eq('clinic_id', clinicId);
@@ -1370,8 +1455,9 @@ export async function updatePatient(
   if (error) throw new Error(error.message);
 
   await auditLog(clinicId, actorRole, 'patient_updated', patientId, {
-    name: updates.name.trim(),
-    phone: updates.phone.trim(),
+    name: nextName,
+    phone,
+    no_phone: noPhone,
   });
 
   const slug = await getClinicSlug(clinicId);
