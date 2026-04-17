@@ -1,7 +1,7 @@
-# Swasthya Clinic - Comprehensive End-to-End User Flow & Application Spec
+# Medilite AI - Comprehensive End-to-End User Flow & Application Spec
 
 ## 1. Executive Summary
-Swasthya Clinic is a voice-first, multi-tenant patient appointment and clinic management system built specifically for Indian clinics. It leverages **Next.js 16 (App Router)**, **Supabase** for PostgreSQL/Auth, and **Sarvam AI** for local language Speech-to-Text (STT), Text-to-Speech (TTS), and LLM-based extraction (AI Scribe).
+Medilite AI is a voice-first, multi-tenant patient appointment and clinic management system built specifically for Indian clinics. It leverages **Next.js 16 (App Router)**, **Supabase** for PostgreSQL/Auth, and **Sarvam AI** for local language Speech-to-Text (STT), Text-to-Speech (TTS), and LLM-based extraction (AI Scribe).
 
 The application strictly adheres to a "No Tailwind" policy, using pure CSS variables (`globals.css`) with a clean, medical teal branding, and is optimized for a mobile-first, responsive experience.
 
@@ -16,7 +16,7 @@ The application strictly adheres to a "No Tailwind" policy, using pure CSS varia
 - **Mobile Safe Areas:** Inputs and bottom-aligned elements respect the `.input-safe-area` and `.mobile-content-shell` classes to prevent mobile keyboards or fixed bottom navigations from obscuring content.
 
 ### 2.2 Navigation Shells
-- **Global Header (`.bda-header`):** Desktop and top-level mobile header featuring the Swasthya Clinic stethoscope seal, bilingual branding (ಸ್ವಾಸ್ಥ್ಯ ಕ್ಲಿನಿಕ್ / Swasthya Clinic), and a "VOICE-FIRST" badge.
+- **Global Header (`.bda-header`):** Desktop and top-level mobile header featuring the Medilite AI stethoscope seal, bilingual branding (ಸ್ವಾಸ್ಥ್ಯ ಕ್ಲಿನಿಕ್ / Medilite AI), and a "VOICE-FIRST" badge.
 - **Staff Desktop Navigation:** A horizontal sub-nav (`.slug-sub-nav`) rendered just below the main header on viewports `> 768px`.
 - **Staff Mobile Navigation (`StaffBottomNav.tsx`):** A fixed bottom navigation bar rendered on viewports `<= 768px`. It provides quick access to:
   - 🏠 Queue (`/[slug]/queue`)

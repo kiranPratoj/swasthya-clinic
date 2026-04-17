@@ -6,7 +6,7 @@ Paste this entire prompt into Codex. All files referenced are in the repo.
 
 ## Context
 
-You are building a voice-first clinic appointment system called Swasthya Clinic.
+You are building a voice-first clinic appointment system called Medilite AI.
 The codebase is forked from a government appointment system (BDA CPIMS).
 Read CONTRACTS.md first — it is the source of truth.
 

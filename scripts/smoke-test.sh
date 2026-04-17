@@ -2,7 +2,7 @@
 BASE_URL="http://localhost:3000"
 
 echo "Checking Home Page..."
-curl -s "$BASE_URL/" | grep -q "Swasthya Clinic" && echo "✅ Home Page OK" || echo "❌ Home Page Failed"
+curl -s "$BASE_URL/" | grep -q "Medilite AI" && echo "✅ Home Page OK" || echo "❌ Home Page Failed"
 
 echo "Checking Onboard Page..."
 curl -s "$BASE_URL/onboard" | grep -q "Register Clinic" && echo "✅ Onboard Page OK" || echo "❌ Onboard Page Failed"

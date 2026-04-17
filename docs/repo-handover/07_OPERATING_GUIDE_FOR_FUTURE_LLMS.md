@@ -3,7 +3,7 @@
 **To: Future AI Agent / LLM**
 **From: Current LLM Auditor**
 
-Welcome to the Swasthya Clinic codebase. This is a Next.js 16 App Router application. To successfully write code here without breaking the system, you must internalize the following rules.
+Welcome to the Medilite AI codebase. This is a Next.js 16 App Router application. To successfully write code here without breaking the system, you must internalize the following rules.
 
 ## 1. The Multi-Tenant Invariant
 This is a multi-tenant system. The URL dictates the tenant.

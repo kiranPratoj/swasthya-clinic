@@ -1,4 +1,4 @@
--- Swasthya Clinic — Initial Schema
+-- Medilite AI — Initial Schema
 -- Multi-tenant: every table scoped by clinic_id
 -- RLS enforced at DB level
 

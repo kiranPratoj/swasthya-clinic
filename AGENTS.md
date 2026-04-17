@@ -1,4 +1,4 @@
-# Medilite AI — Claude Code Project Guide
+# Medilite AI — Codex Project Guide
 
 ## Product
 Multi-tenant clinic management SaaS. Each clinic has a **slug** (e.g. `drpriya`). Staff roles: `admin`, `doctor`, `receptionist`. Patients are unauthenticated (magic link or token-based access).

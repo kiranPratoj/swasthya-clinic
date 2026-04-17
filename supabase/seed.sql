@@ -1,4 +1,4 @@
--- Swasthya Clinic — Demo Seed
+-- Medilite AI — Demo Seed
 -- Creates one demo clinic with a doctor and 10 appointments across all statuses
 
 do $$

@@ -1,4 +1,4 @@
-// Swasthya Clinic — Domain Types
+// Medilite AI — Domain Types
 // Single source of truth. Match CONTRACTS.md exactly.
 
 export type WorkingHourSlot = {

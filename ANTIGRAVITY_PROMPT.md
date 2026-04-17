@@ -6,7 +6,7 @@ Paste this entire prompt into Antigravity. All files referenced are in the repo.
 
 ## Context
 
-You are building a voice-first clinic appointment system called Swasthya Clinic.
+You are building a voice-first clinic appointment system called Medilite AI.
 The codebase is forked from a government appointment system (BDA CPIMS).
 Read CONTRACTS.md first — it is the source of truth.
 
@@ -119,7 +119,7 @@ Replace BDA seal in `src/app/layout.tsx` with this inline stethoscope SVG:
 </svg>
 ```
 
-Update `.bda-brand-text` title to "Swasthya Clinic" (in layout.tsx).
+Update `.bda-brand-text` title to "Medilite AI" (in layout.tsx).
 Update `.bda-nav-link` colors to match teal theme.
 
 ---

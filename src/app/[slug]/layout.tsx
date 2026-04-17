@@ -50,6 +50,7 @@ export default async function SlugLayout({
 
   const clinicName = ctx?.clinic.name ?? slug;
   const doctorName = normalizeDoctorName(ctx?.doctor?.name ?? 'Doctor');
+  const currentPath = pathname ?? '';
   const primaryNavItems = [
     { href: `/${slug}/queue`, label: 'Queue' },
     { href: `/${slug}/intake`, label: 'Intake' },
@@ -87,22 +88,31 @@ export default async function SlugLayout({
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem', flexWrap: 'wrap' }}>
               <nav className="slug-sub-nav" style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-                {primaryNavItems.map(({ href, label }) => (
-                  <Link key={href} href={href} style={{
-                    padding: '0.55rem 0.85rem',
-                    fontSize: '0.8rem',
-                    fontWeight: 700,
-                    color: 'var(--color-primary)',
-                    borderRadius: '999px',
-                    border: '1px solid var(--color-primary-outline)',
-                    background: 'white',
-                    boxShadow: 'var(--shadow-sm)',
-                    textDecoration: 'none',
-                    whiteSpace: 'nowrap',
-                  }}>
-                    {label}
-                  </Link>
-                ))}
+                {primaryNavItems.map(({ href, label }) => {
+                  const isActive = currentPath === href || currentPath.startsWith(`${href}/`);
+
+                  return (
+                    <Link
+                      key={href}
+                      href={href}
+                      aria-current={isActive ? 'page' : undefined}
+                      style={{
+                        padding: '0.55rem 0.85rem',
+                        fontSize: '0.8rem',
+                        fontWeight: 700,
+                        color: isActive ? 'white' : 'var(--color-primary)',
+                        borderRadius: '999px',
+                        border: isActive ? '1px solid var(--color-primary)' : '1px solid var(--color-primary-outline)',
+                        background: isActive ? 'var(--color-primary)' : 'white',
+                        boxShadow: 'var(--shadow-sm)',
+                        textDecoration: 'none',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {label}
+                    </Link>
+                  );
+                })}
               </nav>
               <StaffMoreMenu items={moreNavItems} />
             </div>

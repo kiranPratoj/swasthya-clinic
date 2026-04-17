@@ -7,8 +7,8 @@ import BrandLockup from '@/components/BrandLockup';
 import NavDemoButton from '@/components/landing/NavDemoButton';
 
 export const metadata: Metadata = {
-  title: 'Medilite AI | Smart clinic flow for modern care',
-  description: 'Medilite AI is a voice-first clinic flow and continuity platform for Indian clinics, powered by Sarvam AI.',
+  title: 'Medilite AI | Voice-First Clinic Flow',
+  description: 'Smart clinic flow and continuity platform for Indian clinics.',
 };
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
@@ -22,7 +22,17 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           <div className="max-w-7xl px-4 bda-header-shell">
             <div className="bda-header-main">
               <Link href="/" className="bda-brand">
-                <BrandLockup markSize={40} titleSize="sm" />
+                <div className="bda-seal">
+                  <svg width="40" height="40" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <circle cx="20" cy="20" r="20" fill="#0891b2"/>
+                    <path d="M13 12c0-1.1.9-2 2-2h2c1.1 0 2 .9 2 2v6c0 3.3-2.7 6-6 6v2c0 2.2 1.8 4 4 4s4-1.8 4-4v-1.1c1.7-.4 3-2 3-3.9V14" 
+                          stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+                    <circle cx="27" cy="13" r="2" stroke="white" strokeWidth="1.8"/>
+                  </svg>
+                </div>
+                <div className="bda-brand-text">
+                  <span className="bda-brand-english">Medilite AI</span>
+                </div>
               </Link>
 
               {!isClinicScopedPage && (
@@ -76,12 +86,17 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             <div className="bda-footer-copy">
               <div style={{ display: 'grid', gap: '1.2rem' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.9rem' }}>
-                  <div className="bda-footer-mark" aria-hidden="true">
-                    <BrandMark size={36} />
+                  <div className="bda-seal" aria-hidden="true" style={{ width: '36px', height: '36px' }}>
+                    <svg width="36" height="36" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <circle cx="20" cy="20" r="20" fill="#0891b2"/>
+                      <path d="M13 12c0-1.1.9-2 2-2h2c1.1 0 2 .9 2 2v6c0 3.3-2.7 6-6 6v2c0 2.2 1.8 4 4 4s4-1.8 4-4v-1.1c1.7-.4 3-2 3-3.9V14" 
+                            stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+                      <circle cx="27" cy="13" r="2" stroke="white" strokeWidth="1.8"/>
+                    </svg>
                   </div>
                   <div>
                     <div className="bda-footer-title">Medilite AI</div>
-                    <div className="bda-footer-powered">powered by Sarvam AI</div>
+                    <div className="bda-footer-powered">Medical Excellence</div>
                   </div>
                 </div>
                 <div style={{ color: 'var(--color-text-muted)', maxWidth: '28rem' }}>

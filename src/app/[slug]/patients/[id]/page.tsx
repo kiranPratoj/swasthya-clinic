@@ -48,6 +48,34 @@ function extractFollowUp(summary: string): string {
   return match?.[1]?.trim() ?? '';
 }
 
+function getPaymentBadgeStyles(status: Appointment['payment_status']): {
+  background: string;
+  color: string;
+  label: string;
+} {
+  if (status === 'verified') {
+    return {
+      background: 'var(--color-success-bg)',
+      color: 'var(--color-success)',
+      label: 'Paid',
+    };
+  }
+
+  if (status === 'failed') {
+    return {
+      background: 'var(--color-error-bg)',
+      color: 'var(--color-error)',
+      label: 'Failed',
+    };
+  }
+
+  return {
+    background: 'var(--color-warning-bg)',
+    color: 'var(--color-warning)',
+    label: 'Pending',
+  };
+}
+
 function ClinicalCard({
   appointment,
   visitRecord,
@@ -58,6 +86,7 @@ function ClinicalCard({
   const diagnosis = visitRecord ? extractDiagnosis(visitRecord.summary) : '';
   const prescription = visitRecord ? extractPrescription(visitRecord.summary) : [];
   const followUp = visitRecord ? extractFollowUp(visitRecord.summary) : '';
+  const paymentBadge = getPaymentBadgeStyles(appointment.payment_status);
 
   return (
     <article
@@ -117,6 +146,18 @@ function ClinicalCard({
             }}
           >
             {appointment.status.replace('_', ' ')}
+          </span>
+          <span
+            style={{
+              fontSize: '0.75rem',
+              padding: '0.2rem 0.6rem',
+              borderRadius: '999px',
+              background: paymentBadge.background,
+              color: paymentBadge.color,
+              fontWeight: 700,
+            }}
+          >
+            {paymentBadge.label}
           </span>
         </div>
         <span style={{ color: 'var(--color-text-muted)', fontSize: '0.85rem', fontWeight: 600 }}>
@@ -363,19 +404,40 @@ export default async function PatientProfilePage({
                   <th style={{ padding: '1rem' }}>Visit type</th>
                   <th style={{ padding: '1rem' }}>Complaint</th>
                   <th style={{ padding: '1rem' }}>Status</th>
+                  <th style={{ padding: '1rem' }}>Payment</th>
                 </tr>
               </thead>
               <tbody>
-                {appointments.map((appointment) => (
-                  <tr key={appointment.id} style={{ borderBottom: '1px solid var(--color-bg)' }}>
-                    <td style={{ padding: '1rem' }}>{formatDate(appointment.booked_for)}</td>
-                    <td style={{ padding: '1rem' }}>{formatVisitType(appointment.visit_type)}</td>
-                    <td style={{ padding: '1rem' }}>{appointment.complaint}</td>
-                    <td style={{ padding: '1rem', textTransform: 'capitalize' }}>
-                      {appointment.status.replace('_', ' ')}
-                    </td>
-                  </tr>
-                ))}
+                {appointments.map((appointment) => {
+                  const paymentBadge = getPaymentBadgeStyles(appointment.payment_status);
+
+                  return (
+                    <tr key={appointment.id} style={{ borderBottom: '1px solid var(--color-bg)' }}>
+                      <td style={{ padding: '1rem' }}>{formatDate(appointment.booked_for)}</td>
+                      <td style={{ padding: '1rem' }}>{formatVisitType(appointment.visit_type)}</td>
+                      <td style={{ padding: '1rem' }}>{appointment.complaint}</td>
+                      <td style={{ padding: '1rem', textTransform: 'capitalize' }}>
+                        {appointment.status.replace('_', ' ')}
+                      </td>
+                      <td style={{ padding: '1rem' }}>
+                        <span
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            padding: '0.2rem 0.6rem',
+                            borderRadius: '999px',
+                            background: paymentBadge.background,
+                            color: paymentBadge.color,
+                            fontWeight: 700,
+                            fontSize: '0.78rem',
+                          }}
+                        >
+                          {paymentBadge.label}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

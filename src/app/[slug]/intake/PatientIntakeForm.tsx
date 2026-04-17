@@ -77,6 +77,29 @@ function StopIcon() {
   );
 }
 
+function SpinnerIcon() {
+  return (
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      aria-hidden="true"
+    >
+      <animateTransform
+        attributeName="transform"
+        type="rotate"
+        from="0 12 12"
+        to="360 12 12"
+        dur="0.8s"
+        repeatCount="indefinite"
+      />
+      <circle cx="12" cy="12" r="9" stroke="currentColor" strokeOpacity="0.28" strokeWidth="3" />
+      <path d="M21 12a9 9 0 0 0-9-9" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 function getTodayIsoDate(): string {
   const now = new Date();
   const localTime = new Date(now.getTime() - now.getTimezoneOffset() * 60000);
@@ -1384,7 +1407,10 @@ export default function PatientIntakeForm({
                   opacity: canSubmit ? 1 : 0.65,
                 }}
               >
-                {isSubmitting ? 'Creating Token...' : 'Create Token'}
+                <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '0.55rem' }}>
+                  {isSubmitting && <SpinnerIcon />}
+                  <span>{isSubmitting ? 'Creating Token...' : 'Create Token'}</span>
+                </span>
               </button>
             </div>
           </form>
