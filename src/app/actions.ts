@@ -414,12 +414,12 @@ export async function createClinic(data: OnboardingInput): Promise<{ clinicId: s
     speciality: data.speciality,
     phone: data.phone,
     working_hours: {
-      mon: { open: '09:00', close: '17:00' },
-      tue: { open: '09:00', close: '17:00' },
-      wed: { open: '09:00', close: '17:00' },
-      thu: { open: '09:00', close: '17:00' },
-      fri: { open: '09:00', close: '17:00' },
-      sat: { open: '09:00', close: '13:00' },
+      mon: { open: true, slots: [{ start: '09:00', end: '17:00' }] },
+      tue: { open: true, slots: [{ start: '09:00', end: '17:00' }] },
+      wed: { open: true, slots: [{ start: '09:00', end: '17:00' }] },
+      thu: { open: true, slots: [{ start: '09:00', end: '17:00' }] },
+      fri: { open: true, slots: [{ start: '09:00', end: '17:00' }] },
+      sat: { open: true, slots: [{ start: '09:00', end: '13:00' }] },
     },
     slot_duration_mins: 15,
   });
@@ -1464,14 +1464,21 @@ export async function getAdminStats(date?: string) {
 
   // 2. Calculate Average Wait Time from audit logs
   // We look for transitions from 'confirmed' or 'booked' to 'in_progress'
+  const nextDay = new Date(targetDate);
+  nextDay.setDate(nextDay.getDate() + 1);
+  const nextDayStr = nextDay.toISOString().split('T')[0];
+
   const { data: logs } = await db
     .from('audit_log')
     .select('target_id, created_at, meta')
     .eq('clinic_id', clinicId)
     .eq('action', 'status_updated')
     .gte('created_at', targetDate + 'T00:00:00')
-    .lte('created_at', targetDate + 'T23:59:59');
+    .lt('created_at', nextDayStr + 'T00:00:00');
 
+  // Cap wait measurement at midnight of targetDate so pre-booked appointments
+  // don't inflate wait time with days of advance booking.
+  const todayStart = new Date(targetDate + 'T00:00:00').getTime();
   let totalWaitMs = 0;
   let waitCount = 0;
 
@@ -1480,8 +1487,9 @@ export async function getAdminStats(date?: string) {
     if (meta?.status === 'in_progress') {
       const appt = all.find(a => a.id === log.target_id);
       if (appt) {
-        const waitMs = new Date(log.created_at).getTime() - new Date(appt.created_at).getTime();
-        if (waitMs > 0) {
+        const arrivedAt = Math.max(new Date(appt.created_at).getTime(), todayStart);
+        const waitMs = new Date(log.created_at).getTime() - arrivedAt;
+        if (waitMs > 0 && waitMs < 8 * 60 * 60 * 1000) {
           totalWaitMs += waitMs;
           waitCount++;
         }
@@ -1518,25 +1526,43 @@ export async function getAdminStats(date?: string) {
   let utilization = 0;
   if (doctor) {
     const dayOfWeek = new Date(targetDate).toLocaleDateString('en-US', { weekday: 'short' }).toLowerCase() as keyof typeof doctor.working_hours;
-    const hours = doctor.working_hours[dayOfWeek];
-    if (hours && hours.slots && hours.slots.length > 0) {
-      const totalMins = hours.slots.reduce((sum, slot) => {
-        const [startH, startM] = slot.start.split(':').map(Number);
-        const [endH, endM] = slot.end.split(':').map(Number);
-        return sum + ((endH * 60 + endM) - (startH * 60 + startM));
-      }, 0);
-      const totalSlots = totalMins / doctor.slot_duration_mins;
+    // Cast to unknown to handle both the typed format { open: boolean, slots: [...] }
+    // and the legacy DB format { open: '09:00', close: '17:00' } seeded before the type was defined.
+    const hoursRaw = doctor.working_hours[dayOfWeek] as unknown;
+    if (hoursRaw && typeof hoursRaw === 'object') {
+      const h = hoursRaw as Record<string, unknown>;
+      let totalMins = 0;
+      if (Array.isArray(h.slots) && h.slots.length > 0) {
+        // Typed format: { open: boolean, slots: [{ start, end }] }
+        totalMins = (h.slots as Array<{ start: string; end: string }>).reduce((sum, slot) => {
+          const [startH, startM] = slot.start.split(':').map(Number);
+          const [endH, endM] = slot.end.split(':').map(Number);
+          return sum + ((endH * 60 + endM) - (startH * 60 + startM));
+        }, 0);
+      } else if (typeof h.open === 'string' && typeof h.close === 'string') {
+        // Legacy format stored in DB: { open: '09:00', close: '17:00' }
+        const [startH, startM] = h.open.split(':').map(Number);
+        const [endH, endM] = h.close.split(':').map(Number);
+        totalMins = (endH * 60 + endM) - (startH * 60 + startM);
+      }
+      const totalSlots = doctor.slot_duration_mins > 0 ? totalMins / doctor.slot_duration_mins : 0;
       utilization = totalSlots > 0 ? Math.round((total / totalSlots) * 100) : 0;
     }
   }
 
   // 5. Flagged Queue (> 30 min wait)
+  // Use todayStart so pre-booked appointments don't appear flagged from their booking date.
   const now = Date.now();
   const flagged = all
-    .filter(a => (a.status === 'booked' || a.status === 'confirmed') && (now - new Date(a.created_at).getTime()) > 30 * 60000)
+    .filter(a =>
+      (a.status === 'booked' || a.status === 'confirmed') &&
+      (now - Math.max(new Date(a.created_at).getTime(), todayStart)) > 30 * 60000
+    )
     .map(a => ({
       name: a.patient?.[0]?.name ?? 'Unknown',
-      waitTime: Math.floor((now - new Date(a.created_at).getTime()) / 60000)
+      waitTime: Math.floor(
+        (now - Math.max(new Date(a.created_at).getTime(), todayStart)) / 60000
+      ),
     }));
 
   return { 
@@ -1832,6 +1858,7 @@ export async function saveVisitRecord(
   prescription: Array<{ drug: string; dose: string; frequency: string }>,
   followUpDate?: string
 ): Promise<void> {
+  await getActorRole();
   const cleanedPrescription = prescription.filter(
     (entry) => entry.drug.trim() || entry.dose.trim() || entry.frequency.trim()
   );
@@ -2006,7 +2033,7 @@ export async function updateAppointmentPayment(
     return { persisted: true, storage: 'audit' };
   }
 
-  throw new Error('Legacy payment update is disabled. Use recordAppointmentPayment instead.');
+  throw new Error('This payment action is no longer supported. Please refresh the page.');
 }
 
 // ─── Demo Request ─────────────────────────────────────────────────────────────

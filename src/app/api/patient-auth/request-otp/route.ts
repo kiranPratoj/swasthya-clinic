@@ -21,7 +21,14 @@ export async function POST(request: NextRequest) {
 
     const profiles = await getPatientsByPhone(clinic.id, normalizedPhone);
     if (profiles.length === 0) {
-      return NextResponse.json({ error: 'No patient found for this number.' }, { status: 404 });
+      // Return neutral 200 — don't leak whether this phone is registered at the clinic.
+      await auditLog(clinic.id, 'patient', 'patient_otp_requested', undefined, {
+        phone: normalizedPhone,
+        send_success: false,
+        send_error: 'no_patient',
+        patient_count: 0,
+      });
+      return NextResponse.json({ success: true });
     }
 
     const { otp } = await requestPatientOtp({

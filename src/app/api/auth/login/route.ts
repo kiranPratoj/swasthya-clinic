@@ -2,6 +2,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { createSession, COOKIE_NAME, SESSION_TTL_SECONDS } from '@/lib/session';
 
+if (!process.env.SUPABASE_SERVICE_ROLE_KEY && process.env.NODE_ENV === 'production') {
+  console.error('[auth/login] SUPABASE_SERVICE_ROLE_KEY missing — clinic_users lookup will fail');
+}
+
 export async function POST(request: NextRequest) {
   try {
     const { email, password } = await request.json() as { email?: string; password?: string };
