@@ -4,10 +4,9 @@ import { raisePatientIssue } from '@/app/actions';
 
 interface Props {
   patientId: string;
-  clinicId: string;
 }
 
-export default function RaiseForm({ patientId, clinicId }: Props) {
+export default function RaiseForm({ patientId }: Props) {
   const [complaint, setComplaint] = useState('');
   const [status, setStatus] = useState<'idle' | 'loading' | 'done' | 'error'>('idle');
   const [tokenNumber, setTokenNumber] = useState<number | null>(null);
@@ -19,7 +18,7 @@ export default function RaiseForm({ patientId, clinicId }: Props) {
     setStatus('loading');
     setErrorMsg('');
     try {
-      const result = await raisePatientIssue(patientId, clinicId, complaint.trim());
+      const result = await raisePatientIssue(patientId, complaint.trim());
       setTokenNumber(result.tokenNumber ?? null);
       setStatus('done');
     } catch (err: unknown) {

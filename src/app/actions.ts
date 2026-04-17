@@ -1344,6 +1344,7 @@ export async function updatePatient(
   updates: { name: string; phone: string }
 ): Promise<void> {
   const { clinicId, db } = await getTenantDb();
+  const actorRole = await getActorRole();
 
   const { data: patient, error: patientError } = await db
     .from('patients')
@@ -1367,7 +1368,7 @@ export async function updatePatient(
 
   if (error) throw new Error(error.message);
 
-  await auditLog(clinicId, 'receptionist', 'patient_updated', patientId, {
+  await auditLog(clinicId, actorRole, 'patient_updated', patientId, {
     name: updates.name.trim(),
     phone: updates.phone.trim(),
   });
@@ -1574,6 +1575,10 @@ export async function getRecentActivity(limit: number = 10) {
 
 export async function updateDoctorSettings(formData: FormData): Promise<void> {
   const { clinicId, db } = await getTenantDb();
+  const actorRole = await getActorRole();
+  if (!['admin', 'doctor'].includes(actorRole)) {
+    throw new Error('Only admin or doctor can update settings.');
+  }
 
   const { data: doctor } = await db
     .from('doctors')
@@ -1582,9 +1587,15 @@ export async function updateDoctorSettings(formData: FormData): Promise<void> {
     .single();
   if (!doctor) throw new Error('Doctor not found');
 
-  const workingHours = formData.get('working_hours')
-    ? JSON.parse(formData.get('working_hours') as string)
-    : undefined;
+  let workingHours: unknown = undefined;
+  try {
+    const rawWorkingHours = formData.get('working_hours');
+    if (typeof rawWorkingHours === 'string' && rawWorkingHours.trim()) {
+      workingHours = JSON.parse(rawWorkingHours);
+    }
+  } catch {
+    throw new Error('Invalid working hours format.');
+  }
 
   await db.from('doctors').update({
     name: formData.get('name') as string,
@@ -1614,9 +1625,16 @@ export async function getDoctorForClinic(): Promise<Doctor | null> {
 export async function logCommunicationEvent(
   data: Omit<CommunicationEvent, 'id' | 'created_at'>
 ): Promise<void> {
-  const clinicId = data.clinic_id;
-  await getClinicDb(clinicId).from('communication_events').insert(data);
-  await auditLog(clinicId, 'system', 'communication_sent', data.appointment_id ?? undefined, {
+  const { clinicId, db } = await getTenantDb();
+  const actorRole = await getActorRole();
+  if (clinicId !== data.clinic_id) {
+    throw new Error('Communication event clinic mismatch.');
+  }
+  await db.from('communication_events').insert({
+    ...data,
+    clinic_id: clinicId,
+  });
+  await auditLog(clinicId, actorRole, 'communication_sent', data.appointment_id ?? undefined, {
     channel: data.channel,
     template: data.template_name,
     status: data.status,
@@ -1626,16 +1644,17 @@ export async function logCommunicationEvent(
 // ─── Voice API helper (called from API route, not server action) ──────────────
 
 export async function processVoiceIntake(fd: FormData) {
+  await getActorRole();
   const { processPatientVoiceInput } = await import('@/lib/patientExtractionAdapter');
   return processPatientVoiceInput(fd);
 }
 
 export async function raisePatientIssue(
   patientId: string,
-  clinicId: string,
   complaint: string
 ): Promise<{ tokenNumber: number | null }> {
-  const db = getClinicDb(clinicId);
+  const { clinicId, db } = await getTenantDb();
+  await getActorRole();
   const today = new Date().toISOString().split('T')[0];
 
   // Get doctor for this clinic
@@ -1799,6 +1818,7 @@ export async function getAppointmentDetails(
 }
 
 export async function generateSoapNote(transcript: string) {
+  await getActorRole();
   const { requestSarvamToolObject } = await import('@/lib/sarvamChatAdapter');
   
   const systemPrompt = `You are an AI medical scribe. Convert the following doctor-patient consultation transcript into a structured SOAP note and extract diagnosis and prescription.
@@ -2076,7 +2096,7 @@ export async function getPatientReports(patientId: string): Promise<PatientRepor
 
   if (error || !data) return [];
 
-  // Generate a 1-hour signed URL for each report
+  // Generate a 24-hour signed URL for each report
   const storageDb = getDb();
   const reports: PatientReport[] = await Promise.all(
     data.map(async (row) => {

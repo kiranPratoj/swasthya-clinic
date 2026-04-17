@@ -57,25 +57,34 @@ export async function getPatientsByPhone(
     return [];
   }
 
-  const profiles = await Promise.all(
-    patients.map(async (patient) => {
-      const { data: lastVisit } = await db
-        .from('visit_history')
-        .select('created_at')
-        .eq('patient_id', patient.id as string)
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
+  const patientIds = patients.map((patient) => patient.id as string);
+  const { data: visitRows, error: visitError } = await db
+    .from('visit_history')
+    .select('patient_id, created_at')
+    .in('patient_id', patientIds)
+    .order('created_at', { ascending: false });
 
-      return {
-        id: patient.id as string,
-        name: patient.name as string,
-        age: (patient.age as number | null) ?? null,
-        phone: (patient.phone as string | null) ?? null,
-        lastVisit: (lastVisit?.created_at as string | null) ?? null,
-      } satisfies PatientPortalProfile;
-    })
-  );
+  if (visitError) {
+    throw new Error(visitError.message);
+  }
+
+  const lastVisitByPatientId = new Map<string, string>();
+  for (const row of visitRows ?? []) {
+    const patientId = row.patient_id as string | null;
+    const createdAt = row.created_at as string | null;
+    if (!patientId || !createdAt || lastVisitByPatientId.has(patientId)) {
+      continue;
+    }
+    lastVisitByPatientId.set(patientId, createdAt);
+  }
+
+  const profiles = patients.map((patient) => ({
+    id: patient.id as string,
+    name: patient.name as string,
+    age: (patient.age as number | null) ?? null,
+    phone: (patient.phone as string | null) ?? null,
+    lastVisit: lastVisitByPatientId.get(patient.id as string) ?? null,
+  } satisfies PatientPortalProfile));
 
   return profiles;
 }

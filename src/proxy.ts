@@ -18,6 +18,13 @@ const PUBLIC_PREFIXES = [
 
 // Clinic-scoped paths that are public.
 const PUBLIC_SLUG_SUFFIXES: string[] = ['/book', '/portal'];
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+const SUPABASE_PROXY_KEY =
+  process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+
+if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+  console.error('[proxy] SUPABASE_SERVICE_ROLE_KEY missing — clinic routing may fail');
+}
 
 function isPublicPath(pathname: string): boolean {
   return PUBLIC_PREFIXES.some((p) => pathname.startsWith(p));
@@ -64,10 +71,7 @@ export async function proxy(request: NextRequest) {
   if (!slug) return NextResponse.next();
 
   // ── Resolve clinic ────────────────────────────────────────────────────────
-  const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  );
+  const supabase = createClient(SUPABASE_URL, SUPABASE_PROXY_KEY);
 
   let clinicId: string | null = null;
 

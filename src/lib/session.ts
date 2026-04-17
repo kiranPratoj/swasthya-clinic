@@ -3,15 +3,18 @@
 
 import { createHmac } from 'crypto';
 import type { PatientSessionPayload, SessionPayload } from './types';
-
-const SECRET = process.env.SESSION_SECRET ?? 'swasthya-dev-secret-change-in-prod';
 const COOKIE_NAME = 'swasthya_session';
 const PATIENT_COOKIE_NAME = 'medilite_patient_session';
 const SESSION_TTL_SECONDS = 60 * 60 * 8; // 8 hours
 const PATIENT_SESSION_TTL_SECONDS = 60 * 60 * 24 * 7; // 7 days
 
 function sign(payload: string): string {
-  return createHmac('sha256', SECRET).update(payload).digest('base64url');
+  const secret = process.env.SESSION_SECRET;
+  if (!secret && process.env.NODE_ENV === 'production') {
+    throw new Error('SESSION_SECRET env var is required in production');
+  }
+  const signingKey = secret ?? 'swasthya-dev-secret-change-in-prod';
+  return createHmac('sha256', signingKey).update(payload).digest('base64url');
 }
 
 export function createSession(data: Omit<SessionPayload, 'exp'>): string {
