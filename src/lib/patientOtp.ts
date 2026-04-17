@@ -1,4 +1,4 @@
-import { createHash, randomInt } from 'node:crypto';
+import { createHash, randomInt, timingSafeEqual } from 'node:crypto';
 import { getDb } from './db';
 
 const OTP_TABLE = 'patient_login_otps';
@@ -8,6 +8,18 @@ const OTP_MAX_ATTEMPTS = 5;
 
 function hashOtp(otp: string): string {
   return createHash('sha256').update(otp).digest('hex');
+}
+
+function hashesMatch(expectedHash: string, otp: string): boolean {
+  const actualHash = hashOtp(otp);
+  const expectedBuffer = Buffer.from(expectedHash, 'utf8');
+  const actualBuffer = Buffer.from(actualHash, 'utf8');
+
+  if (expectedBuffer.length !== actualBuffer.length) {
+    return false;
+  }
+
+  return timingSafeEqual(expectedBuffer, actualBuffer);
 }
 
 function formatOtp(value: number): string {
@@ -134,7 +146,7 @@ export async function verifyPatientOtp(input: {
     return { ok: false, error: 'Too many attempts. Request a new code.' };
   }
 
-  if (latest.otp_hash !== hashOtp(otp)) {
+  if (!hashesMatch(String(latest.otp_hash ?? ''), otp)) {
     await getDb()
       .from(OTP_TABLE)
       .update({ attempt_count: attemptCount + 1 })

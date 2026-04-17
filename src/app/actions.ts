@@ -6,6 +6,7 @@ import { getDb, getClinicDb, auditLog } from '@/lib/db';
 import { requireSession } from '@/lib/auth';
 import { computeBillSnapshot, toMoneyNumber } from '@/lib/billing';
 import { createPatientToken } from '@/lib/patientToken';
+import { attachPatientReportSignedUrls } from '@/lib/reportUrls';
 import type {
   Appointment,
   AppointmentStatus,
@@ -1649,53 +1650,6 @@ export async function processVoiceIntake(fd: FormData) {
   return processPatientVoiceInput(fd);
 }
 
-export async function raisePatientIssue(
-  patientId: string,
-  complaint: string
-): Promise<{ tokenNumber: number | null }> {
-  const { clinicId, db } = await getTenantDb();
-  await getActorRole();
-  const today = new Date().toISOString().split('T')[0];
-
-  // Get doctor for this clinic
-  const { data: doctor } = await db
-    .from('doctors')
-    .select('id')
-    .eq('clinic_id', clinicId)
-    .single();
-
-  // Get max token for today
-  const { data: tokens } = await db
-    .from('appointments')
-    .select('token_number')
-    .eq('clinic_id', clinicId)
-    .eq('booked_for', today)
-    .order('token_number', { ascending: false })
-    .limit(1);
-
-  const nextToken = (tokens?.[0]?.token_number ?? 0) + 1;
-
-  const { data, error } = await db
-    .from('appointments')
-    .insert({
-      clinic_id: clinicId,
-      patient_id: patientId,
-      doctor_id: doctor?.id,
-      status: 'confirmed',
-      visit_type: 'walk-in',
-      complaint,
-      booked_for: today,
-      token_number: nextToken,
-    })
-    .select('token_number')
-    .single();
-
-  if (error) throw new Error(error.message);
-
-  revalidatePath(`/`);
-  return { tokenNumber: data?.token_number ?? null };
-}
-
 export async function callNextPatient(): Promise<void> {
   const { clinicId, db } = await getTenantDb();
   const actorRole = await getActorRole();
@@ -2096,20 +2050,5 @@ export async function getPatientReports(patientId: string): Promise<PatientRepor
 
   if (error || !data) return [];
 
-  // Generate a 24-hour signed URL for each report
-  const storageDb = getDb();
-  const reports: PatientReport[] = await Promise.all(
-    data.map(async (row) => {
-      const { data: urlData } = await storageDb.storage
-        .from('clinic-reports')
-        .createSignedUrl(row.file_path as string, 86400); // 24h — covers a full clinic day
-
-      return {
-        ...row,
-        signedUrl: urlData?.signedUrl ?? '',
-      } as PatientReport;
-    })
-  );
-
-  return reports;
+  return attachPatientReportSignedUrls(data as Array<Omit<PatientReport, 'signedUrl'>>);
 }

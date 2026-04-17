@@ -1,4 +1,5 @@
 import { getClinicDb, getDb } from './db';
+import { attachPatientReportSignedUrls } from './reportUrls';
 import type {
   Appointment,
   Patient,
@@ -156,19 +157,5 @@ export async function getPortalReports(
     return [];
   }
 
-  const storageDb = getDb();
-  const reports: PatientReport[] = await Promise.all(
-    data.map(async (row) => {
-      const { data: urlData } = await storageDb.storage
-        .from('clinic-reports')
-        .createSignedUrl(row.file_path as string, 86400); // 24h — covers a full clinic day
-
-      return {
-        ...(row as Omit<PatientReport, 'signedUrl'>),
-        signedUrl: urlData?.signedUrl ?? '',
-      };
-    })
-  );
-
-  return reports;
+  return attachPatientReportSignedUrls(data as Array<Omit<PatientReport, 'signedUrl'>>);
 }
