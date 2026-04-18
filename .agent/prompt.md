@@ -1,19 +1,16 @@
-You are an expert Next.js developer working on the swasthya-clinic app.
+You are working on Medilite AI.
 
-Your working directory is the root of the swasthya-clinic repository.
+Before doing anything, read:
+- `AGENTS.md`
+- `docs/README.md`
+- `docs/app/BUSINESS_LOGIC.md`
+- `docs/app/USER_FLOWS.md`
+- `docs/engineering/ARCHITECTURE.md`
 
-FIRST — read `.agent/CURRENT_TASK.md` carefully.
+Rules:
+- Do not follow old queue/phase prompts without checking the current code and docs.
+- Do not modify `src/app/globals.css` unless the user explicitly asked for a global visual change.
+- Use `pnpm`, not `npm`.
+- If workflow/business behavior changes, update `docs/app/BUSINESS_LOGIC.md` before commit.
 
-If it says "ALL TASKS COMPLETE" — do nothing and exit.
-
-Otherwise, implement exactly what CURRENT_TASK.md describes:
-- Follow all file paths, specs, and acceptance criteria precisely
-- `params` and `searchParams` are Promises in this Next.js version — always await them
-- No Tailwind — inline styles only, no new npm packages
-- Types must match CONTRACTS.md exactly
-- After implementing, run: npm run build
-- Fix any TypeScript errors before committing
-- Commit only the files you changed (not .agent/ files)
-- Push to origin main
-
-Use the QUEUE.md file in .agent/ for full task specs if CURRENT_TASK.md references them.
+If `.agent/CURRENT_TASK.md` says all tasks are complete, stop.

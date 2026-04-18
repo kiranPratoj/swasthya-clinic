@@ -1,5 +1,7 @@
 # 08_GAPS_RISKS_AND_NEXT_STEPS
 
+> Historical snapshot. Some items below may already be resolved in code. Check `docs/engineering/ARCHITECTURE.md` and the current implementation before acting on this file.
+
 ## 1. Architectural Risks
 - **Service Role Bypass:** Because `src/lib/db.ts` uses `SUPABASE_SERVICE_ROLE_KEY`, a single missed `.eq('clinic_id', clinicId)` in `actions.ts` will leak data across clinics. 
 - **Recommendation:** Implement a wrapper around the Supabase client that automatically applies the `clinic_id` filter to all queries, or switch to using short-lived custom JWTs that Supabase RLS can read natively.

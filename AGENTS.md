@@ -35,8 +35,9 @@ supabase db push  # apply migrations to remote Supabase
 ### Routing & Auth
 - Proxy (`src/proxy.ts`) enforces staff auth for all `/{slug}/*` routes
 - Public clinic routes listed in `PUBLIC_SLUG_SUFFIXES` — currently `/book` and `/portal`
-- Patient portal: `/{slug}/portal?t={uuid}` — validated via `src/lib/patientToken.ts`
-- Existing patient token portal: `/{slug}/patient/[token]` — legacy, sequential token auth
+- Patient portal login: `/{slug}/portal/login` — WhatsApp OTP based patient auth
+- Patient portal magic link: `/{slug}/portal/[token]` — validated via `src/lib/patientToken.ts`
+- Existing patient token portal: `/{slug}/patient/[token]` — legacy public continuity route
 
 ### Components
 - Server components fetch data directly (no `useEffect`)
@@ -50,8 +51,15 @@ supabase db push  # apply migrations to remote Supabase
 ### AI / Parsing
 - Text structuring → `requestSarvamToolObject()` in `src/lib/sarvamChatAdapter.ts`
 - Image OCR → Sarvam Document Intelligence (async job: create → upload ZIP → poll → download markdown)
-- PDF text extraction → `pdf-parse` (v2 class API: `new PDFParse({ data: buffer })`)
+- PDF report parsing currently also goes through Sarvam Document Intelligence
 - Never use `generateObject` (removed in AI SDK v6) — use `generateText` with `output: Output.object()`
+
+### Docs
+- Canonical product/business logic lives in `docs/app/BUSINESS_LOGIC.md`
+- Route-level flows live in `docs/app/USER_FLOWS.md`
+- Technical invariants live in `docs/engineering/ARCHITECTURE.md`
+- If a change affects business behavior, update `docs/app/BUSINESS_LOGIC.md` before commit
+- Do not modify `src/app/globals.css` unless the user explicitly asks for a global visual change
 
 ### WhatsApp
 - All outbound messages via `src/lib/whatsappAdapter.ts`

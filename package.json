@@ -1,13 +1,16 @@
 {
-  "name": "swasthya-clinic",
+  "name": "medilite-ai",
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "prepare": "node scripts/setup-git-hooks.mjs",
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "node --import tsx --test src/lib/*.test.ts"
+    "test": "node --import tsx --test src/lib/*.test.ts",
+    "docs:check": "node scripts/check-business-logic-sync.mjs",
+    "hooks:setup": "node scripts/setup-git-hooks.mjs"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.69",

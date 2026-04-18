@@ -1,5 +1,7 @@
 # 03_FEATURE_STATUS_MATRIX
 
+> Historical snapshot. Use `docs/app/BUSINESS_LOGIC.md` and `docs/app/USER_FLOWS.md` for the current maintained app behavior.
+
 | Feature / Module | Purpose | Main routes/files | Current status | What works | Missing / broken | Evidence / Risk Level |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
 | **Clinic Onboarding** | Allow new clinics to register | `/onboard`, `actions.ts:createClinic` | Fully implemented | Form submission, slug validation, clinic & default doctor creation | None | Verified via `page.tsx` and `OnboardForm.tsx`. **Risk: Low** |
